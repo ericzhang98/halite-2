@@ -89,18 +89,6 @@ def closest_enemy_ship(ship, me):
             break
     return nearest_ship
 
-def closest_free_ship(ship, me):
-    entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    nearest_ship = None
-    for distance in sorted(entities_by_distance):
-        nearest_ship = next((nearest_entity for nearest_entity in
-            entities_by_distance[distance] if isinstance(nearest_entity,
-                hlt.entity.Ship) and nearest_entity.owner == me and 
-                nearest_entity.docking_status == ship.DockingStatus.UNDOCKED), None)
-        if nearest_ship:
-            break
-    return nearest_ship
-
 def collide_entity(ship, entity):
     navigate_command = ship.navigate(ship.closest_point_to(entity,
         min_distance=-entity.radius), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
@@ -150,7 +138,6 @@ while True:
     # ship and planet lists
     friendly_ships = game_map.get_me().all_ships() # Don't use friendly_ships since it includes docked ships
     free_ships = [ship for ship in friendly_ships if ship.docking_status == ship.DockingStatus.UNDOCKED]
-    docked_ships = [ship for ship in friendly_ships if ship.docking_status != ship.DockingStatus.UNDOCKED]
     enemy_ships = [ship for ship in game_map._all_ships() if ship.owner != me]
     all_planets = game_map.all_planets()
     unowned_planets = [planet for planet in all_planets if not planet.is_owned()]
@@ -205,8 +192,6 @@ while True:
     else:
         logging.info("No enemy planets")
 
-    logging.info("Time used during setup: %s" % (time.time() - start_time))
-
     # jank but gets rid of early game collision
     if len(friendly_ships) <= 3 and round_counter < 3:
         for i in range(0, len(free_ships)):
@@ -236,20 +221,6 @@ while True:
 
     # Commands for ships
     else:
-        invaders = set()
-        defense_target = {}
-        for ds in docked_ships:
-            closest_invader = closest_enemy_ship(ds, me)
-            if ds.calculate_distance_between(closest_invader) < 10:
-                invaders.add(closest_invader)
-        for invader in invaders:
-            closest_free = closest_free_ship(invader, me)
-            if closest_free and invader.calculate_distance_between(closest_free) < 20:
-                # will overwrite last defense target if closest_free already used, should be ok
-                defense_target[closest_free.id] = invader
-                logging.info("assigning %s to defend against %s" % (closest_free.id, invader.id))
-        logging.info("Time used after defense check: %s" % (time.time() - start_time))
-            
         for i in range(0, len(free_ships)):
             if time.time() >= start_time + 1.8:
                 logging.info("1.8 s exceeded")
@@ -258,15 +229,6 @@ while True:
             ship = free_ships[i]
             
             ce = closest_enemy_planet(ship, me)
-
-            # first check if docked ships need defense
-            if ship.id in defense_target:
-                cmd = attack_ship(ship, defense_target[ship.id])
-                if cmd:
-                    command_queue.append(cmd)
-                else:
-                    logging.info("ship %s couldn't move to attack invader %s" % (ship.id, defense_target[ship.id].id))
-                continue
 
             # if there's an enemy near, go ham
             if ce and ship.calculate_distance_between(ce) < 30:
