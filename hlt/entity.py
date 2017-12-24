@@ -307,6 +307,26 @@ class Ship(Entity):
         speed = speed if (distance >= speed) else distance
         return self.thrust(speed, angle)
 
+    def navigate2(self, target, game_map, speed, avoid_obstacles=True, max_corrections=179, angular_step=1,
+                 ignore_ships=False, ignore_planets=False):
+        if max_corrections <= 0:
+            return None
+        distance = self.calculate_distance_between(target)
+        angle = self.calculate_angle_between(target)
+        ignore = () if not (ignore_ships or ignore_planets) \
+            else Ship if (ignore_ships and not ignore_planets) \
+            else Planet if (ignore_planets and not ignore_ships) \
+            else Entity
+        if avoid_obstacles and game_map.obstacles_between(self, target, ignore):
+            sign = 1 if (180-max_corrections) % 2 == 1 else -1
+            new_target_dangle = sign*(180-max_corrections)*angular_step
+            new_target_dx = math.cos(math.radians(angle + new_target_dangle)) * distance
+            new_target_dy = math.sin(math.radians(angle + new_target_dangle)) * distance
+            new_target = Position(self.x + new_target_dx, self.y + new_target_dy)
+            return self.navigate2(new_target, game_map, speed, True, max_corrections - 1, angular_step)
+        speed = speed if (distance >= speed) else distance
+        return self.thrust(speed, angle)
+
     def can_dock(self, planet):
         """
         Determine whether a ship can dock to a planet

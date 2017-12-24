@@ -112,7 +112,7 @@ def collide_entity(ship, entity):
     return navigate_command
 
 def attack_ship(ship, enemy_ship):
-    navigate_command = ship.navigate(ship.closest_point_to(enemy_ship,
+    navigate_command = ship.navigate2(ship.closest_point_to(enemy_ship,
         min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return navigate_command
 
@@ -177,7 +177,7 @@ while True:
             planet_threshold[p] = ship_dists[threshold_index][1] #genius
 
     # find weighted planet center
-    pc = hlt.entity.Entity(game_map.width, game_map.height, 0, None, None, None)
+    pc = hlt.entity.Entity(game_map.width/2, game_map.height/2, 0, None, None, None)
     total_x = 0
     total_y = 0
     num_docked = 0
@@ -190,7 +190,7 @@ while True:
     if num_docked > 0:
         pc.x = total_x/num_docked
         pc.y = total_y/num_docked
-    logging.info("Planet center: %s, %s" % (pc.x, pc.y))
+    #logging.info("Planet center: %s, %s" % (pc.x, pc.y))
 
     # build priority level for attacking enemy planets based on planet center
     ep_priority = []
@@ -202,13 +202,11 @@ while True:
         ep_priority.sort(key = lambda tup: tup[1])
         ep_attack = ep_priority[0][0]
         logging.info("Priority ep: %s with dist %s" % (ep_attack.id, ep_priority[0][1]))
-    else:
-        logging.info("No enemy planets")
 
     logging.info("Time used during setup: %s" % (time.time() - start_time))
 
-    # jank but gets rid of early game collision
-    if len(friendly_ships) <= 3 and round_counter < 3:
+    # get rid of early game collision
+    if len(my_planets) < 1 and round_counter < 30:
         for i in range(0, len(free_ships)):
             ship = free_ships[i]
             # in order of closeness for dockable planets
@@ -216,20 +214,28 @@ while True:
                 dist = ship.calculate_distance_between(cd)
                 # only send dockable number of ships
                 if dist <= planet_threshold[cd]:
+                    # dock if we can
                     if ship.can_dock(cd):
                         command_queue.append(ship.dock(cd))
                         logging.info("docking")
-                    elif closest_ship_to_planet[cd][0][0] == ship:
-                        point = ship.closest_point_to(cd, min_distance=0)
-                        cmd = ship.navigate(point, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-                        command_queue.append(cmd)
-                    elif closest_ship_to_planet[cd][1][0] == ship:
-                        point = ship.closest_point_to(cd, min_distance=0)
-                        cmd = ship.navigate(point, game_map, speed=int(hlt.constants.MAX_SPEED-1), angular_step=1)
-                        command_queue.append(cmd)
+                    # approach with the same angle as the closest ship
                     else:
-                        point = ship.closest_point_to(cd, min_distance=0)
-                        cmd = ship.navigate(point, game_map, speed=int(hlt.constants.MAX_SPEED-2), angular_step=1)
+                        cs = closest_ship_to_planet[cd][0][0]
+                        angle = cs.calculate_angle_between(cd)
+                        dist_to_surface = dist - cd.radius
+                        logging.info("dist to surface: %s" % dist_to_surface)
+                        # extra -1 buffer to round dist_to_surface down
+                        speed = 7 if dist_to_surface >= 8 else dist_to_surface-1
+                        angle_to_cs = ship.calculate_angle_between(cs) - angle
+                        dx = ship.x - cs.x
+                        dy = ship.y - cs.y
+                        fake_target = hlt.entity.Entity(cd.x+dx, cd.y+dy, 0, None, None, None)
+                        if game_map.obstacles_between(ship, fake_target, (hlt.entity.Planet)):
+                            # if angle_to_cs is positive(starboard) change angle by -5(port), if negative(port) change angle by 5(starboard)
+                            angle_buffer = -10 if angle_to_cs >= 0 else 10
+                            angle = angle + angle_buffer
+                            logging.info("will collide eventually, so changing angle by %s" % angle_buffer)
+                        cmd = ship.thrust(speed, angle)
                         command_queue.append(cmd)
                     break
 
@@ -240,7 +246,7 @@ while True:
         defense_target = {}
         for ds in docked_ships:
             closest_invader = closest_enemy_ship(ds, me)
-            if ds.calculate_distance_between(closest_invader) < 10:
+            if ds.calculate_distance_between(closest_invader) < 20:
                 invaders.add(closest_invader)
         for invader in invaders:
             closest_free = closest_free_ship(invader, me)
@@ -253,7 +259,7 @@ while True:
         for i in range(0, len(free_ships)):
             if time.time() >= start_time + 1.8:
                 logging.info("1.8 s exceeded")
-                break;
+                break
             
             ship = free_ships[i]
             
@@ -269,30 +275,40 @@ while True:
                 continue
 
             # if there's an enemy near, go ham
-            if ce and ship.calculate_distance_between(ce) < 30:
-                cmd = attack_docked_planet(ship, ce)
-                if cmd:
-                    command_queue.append(cmd)
-                else:
-                    logging.info("ship %s couldn't move to attack planet %s" % (ship.id, ce.id))
-                    logging.info("attempt to move to es %s at location %s" % (ce.id, (ce.x, ce.y)))
-                    logging.info("angle %s dist %s" % (ship.calculate_angle_between(ce), ship.calculate_distance_between(ce)))
-                continue
+            if ce:
+                closest_eds = None
+                closest_dist = 999999999
+                for eds in ce.all_docked_ships():
+                    dist = ship.calculate_distance_between(eds)
+                    if dist < closest_dist:
+                        closest_eds = eds
+                        closest_dist = dist
+
+                if closest_eds and ship.calculate_distance_between(closest_eds) < 30:
+                    cmd = attack_ship(ship, closest_eds)
+                    if cmd:
+                        command_queue.append(cmd)
+                    else:
+                        logging.info("ship %s couldn't move to attack planet %s docked ship %s" % (ship.id, ce.id, closest_eds.id))
+                        logging.info("attempt to move to es %s at location %s" % (ce.id, (ce.x, ce.y)))
+                        logging.info("angle %s dist %s" % (ship.calculate_angle_between(ce), ship.calculate_distance_between(ce)))
+                    continue
 
             # otherwise, go for closest nonenemy planet if it exists
             #cd = closest_dockable_planet(ship, me)
             cont = False
             for cd in closest_dockable_planet_list(ship, me):
-                # and the ship is nth closest or closer (n = num docking spots left)
+                # and the ship is nth closest or closer (n = num docking spots left) or we make investment if num free_ships > 5
                 dist = ship.calculate_distance_between(cd)
                 threshold = planet_threshold[cd]
-                if dist < 100 and dist <= threshold:
+                investment_threshold = closest_ship_to_planet[cd][0][1]
+                if (dist <= threshold and dist <= 100) or (dist <= investment_threshold and not cd.is_owned() and len(free_ships) > 5):
 
                     # consider docking if we can dock
                     if ship.can_dock(cd):
                         es = closest_enemy_ship(ship, me)
-                        # make sure we aren't close to an enemy ship when docking
-                        if ship.calculate_distance_between(es) > 15:
+                        # make sure we aren't close to an enemy ship when docking, smart dock
+                        if ship.calculate_distance_between(es) > 30:
                             command_queue.append(ship.dock(cd))
                             logging.info("docking")
                         # if an enemy ship is close, docking isn't safe, so go ham
@@ -305,8 +321,8 @@ while True:
 
                     # go towards a position where we can dock
                     else:
-                        cmd = ship.navigate(ship.closest_point_to(cd,
-                            min_distance=3.5), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+                        cmd = ship.navigate2(ship.closest_point_to(cd,
+                            min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
                         if cmd:
                             command_queue.append(cmd)
                         else:
@@ -343,7 +359,6 @@ while True:
                     logging.info("ship %s couldn't move to attack closest ship %s" % (ship.id, closest_es.id))
             else:
                 logging.info("weird... couln't find closest_es when no enemy planets")
-
 
     game.send_command_queue(command_queue)
     time_used = time.time() - start_time

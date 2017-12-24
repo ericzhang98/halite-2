@@ -72,6 +72,13 @@ class Map:
             result.setdefault(entity.calculate_distance_between(foreign_entity), []).append(foreign_entity)
         return result
 
+    def nearby_entities_by_distance2(self, entity):
+        result = []
+        for foreign_entity in self._all_ships() + self.all_planets():
+            if foreign_entity != entity:
+                result.append((entity, entity.calculate_distance_between(foreign_entity)))
+        return result
+
     def _link(self):
         """
         Updates all the entities with the correct ship and planet objects
