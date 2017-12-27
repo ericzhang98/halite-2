@@ -96,16 +96,8 @@ def collide_entity(ship, entity):
             ignore_planets = True, angular_step=1)
     return navigate_command
 
-def attack_docked_planet(ship, planet, nav=2):
-    docked_ships = planet.all_docked_ships()
-    target_ship = None
-    closest_dist= 999999999
-    for ds in docked_ships:
-        dist = ship.calculate_distance_between(ds)
-        if dist < closest_dist:
-            target_ship = ds
-            closest_dist = dist
-    return attack_ship(ship, target_ship, nav)
+
+# -------------- Geometry ----------------- #
 
 def lines_intersect(line1, line2):
     # todo: have to make two new lines for each one, 0.5 apart and check for those intersections
@@ -147,38 +139,6 @@ def lines_intersect(line1, line2):
         else:
             return False
 
-def trajectories_intersect(line1, line2):
-    max_t = 30
-    startx_1, starty_1, endx_1, endy_1 = line1[0], line1[1], line1[2], line1[3]
-    startx_2, starty_2, endx_2, endy_2 = line2[0], line2[1], line2[2], line2[3]
-
-    dx_1 = endx_1 - startx_1
-    dy_1 = endy_1 - starty_1
-    dx_2 = endx_2 - startx_2
-    dy_2 = endy_2 - starty_2
-
-    for t in range(max_t+1):
-        t_factor = float(t)/max_t
-        tx_1 = startx_1 + t_factor*dx_1
-        ty_1 = starty_1 + t_factor*dy_1
-        tx_2 = startx_2 + t_factor*dx_2
-        ty_2 = starty_2 + t_factor*dy_2
-        if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.001:
-            return True
-    return False
-
-def attack_ship(ship, enemy_ship, nav=2):
-    navigate_command = smart_nav(ship, ship.closest_point_to(enemy_ship, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-    return navigate_command
-
-def flock(ship, closest_fs):
-    cmd = smart_nav(ship, ship.closest_point_to(closest_fs, min_distance=0.5), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-    return cmd
-
-def approach_planet(ship, cd):
-    cmd = smart_nav(ship, ship.closest_point_to(cd, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-    return cmd
-
 # returns list of ships within dist and planet with surfaces within dist, extra fudge of 0.6
 def entities_within_distance(ship, dist):
     entities = []
@@ -191,6 +151,94 @@ def entities_within_distance(ship, dist):
                 entities.append(entity)
     return entities
 
+def trajectories_intersect(line1, line2):
+    max_t = 100 # could do high_accuracy setting and change back down to 30
+    startx_1, starty_1, endx_1, endy_1 = line1[0], line1[1], line1[2], line1[3]
+    startx_2, starty_2, endx_2, endy_2 = line2[0], line2[1], line2[2], line2[3]
+    dx_1 = endx_1 - startx_1
+    dy_1 = endy_1 - starty_1
+    dx_2 = endx_2 - startx_2
+    dy_2 = endy_2 - starty_2
+    for t in range(max_t+1):
+        t_factor = float(t)/max_t
+        tx_1 = startx_1 + t_factor*dx_1
+        ty_1 = starty_1 + t_factor*dy_1
+        tx_2 = startx_2 + t_factor*dx_2
+        ty_2 = starty_2 + t_factor*dy_2
+        # could change distance setting for high_accuracy as well (to like 1.1)
+        if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.001:
+            return True
+    return False
+
+def trajectories_intersect_t(line1, trajectories):
+    max_t = 100 # could do high_accuracy setting and change back down to 30
+    startx_1, starty_1, endx_1, endy_1 = line1[0], line1[1], line1[2], line1[3]
+    dx_1 = endx_1 - startx_1
+    dy_1 = endy_1 - starty_1
+    # cache the ship line
+    discrete_line1 = [0 for i in range(max_t+1)]
+    for t in range(max_t+1):
+        t_factor = float(t)/max_t
+        tx_1 = startx_1 + t_factor*dx_1
+        ty_1 = starty_1 + t_factor*dy_1
+        discrete_line1[t] = (tx_1, ty_1)
+    # for each t in [0, max_t+1], evaluate each trajectory
+    for t in range(max_t+1):
+        t_factor = float(t)/max_t
+        for tra in trajectories:
+            startx_2 = tra[0]
+            starty_2 = tra[1]
+            dx_2 = tra[2]-tra[0]
+            dy_2 = tra[3]-tra[1]
+            tx_2 = startx_2 + t_factor*dx_2
+            ty_2 = starty_2 + t_factor*dy_2
+            tx_1 = discrete_line1[t][0]
+            ty_1 = discrete_line1[t][1]
+            # could change distance setting for high_accuracy as well (to like 1.1)
+            if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.001:
+                return True
+    return False
+
+def trajectories_intersect_l(line1, trajectories):
+    max_t = 100 # could do high_accuracy setting and change back down to 30
+    startx_1, starty_1, endx_1, endy_1 = line1[0], line1[1], line1[2], line1[3]
+    dx_1 = endx_1 - startx_1
+    dy_1 = endy_1 - starty_1
+    # cache the ship line
+    discrete_line1 = [0 for i in range(max_t+1)]
+    for t in range(max_t+1):
+        t_factor = float(t)/max_t
+        tx_1 = startx_1 + t_factor*dx_1
+        ty_1 = starty_1 + t_factor*dy_1
+        discrete_line1[t] = (tx_1, ty_1)
+    # for each trajectory, evaluate each t in [0, max_t+1]
+    for tra in trajectories:
+        startx_2 = tra[0]
+        starty_2 = tra[1]
+        dx_2 = tra[2]-tra[0]
+        dy_2 = tra[3]-tra[1]
+        for t in range(max_t+1):
+            t_factor = float(t)/max_t
+            tx_2 = startx_2 + t_factor*dx_2
+            ty_2 = starty_2 + t_factor*dy_2
+            tx_1 = discrete_line1[t][0]
+            ty_1 = discrete_line1[t][1]
+            # could change distance setting for high_accuracy as well (to like 1.1)
+            if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.001:
+                return True
+    return False
+
+# which is better: a for loop across time or across lines?
+# across time is better when: % along the line where intersection occurs < % lines intersect
+# across lines is better when: % lines intersect < % along the line where intersection occurs
+# main scenario I want to save time in is when there's a fuckton of ships
+# if there's a fuckton of ships, then they're likely hella clumped together
+# which means trajectories will probably intersect earlier along the line?
+# percentage of lines intersecting might not actually change that much
+
+
+# -------------- Movement ----------------- #
+
 # returns thrust cmd if there aren't any intersecting trajectories, otherwise returns None
 # takes in any angle (in degrees), but will calculate with discrete angle
 def move_ship(ship, dist, angle, trajectories):
@@ -200,9 +248,8 @@ def move_ship(ship, dist, angle, trajectories):
     reachable_x = ship.x + speed*math.cos(math.radians(angle))
     reachable_y = ship.y + speed*math.sin(math.radians(angle))
     ship_tra = (ship.x, ship.y, reachable_x, reachable_y)
-    for tra in trajectories:
-        if trajectories_intersect((ship.x, ship.y, reachable_x, reachable_y), tra):
-            return None
+    if trajectories_intersect_l(ship_tra, trajectories):
+        return None
     logging.info("SENDING CMD FOR %s TO (%s, %s)" % (ship.id, reachable_x, reachable_y))
     return ship.thrust(speed, angle)
 
@@ -243,6 +290,40 @@ def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_correctio
     angle = ship.calculate_angle_between(target)
     return attempt_nav(ship, target, dist, angle, fs_trajectories)
 
+
+# -------------- Actions ----------------- #
+
+def attack_docked_planet(ship, planet, nav=2):
+    docked_ships = planet.all_docked_ships()
+    target_ship = None
+    closest_dist= 999999999
+    for ds in docked_ships:
+        dist = ship.calculate_distance_between(ds)
+        if dist < closest_dist:
+            target_ship = ds
+            closest_dist = dist
+    return attack_ship(ship, target_ship, nav)
+
+def attack_ship(ship, enemy_ship, nav=2):
+    dist_from_es = 2
+    if ship.health < 128:
+        dist_from_es = 0.1 # might as well go closer to get hit in place of more healthy ships
+    if ship.health < 64:
+        dist_from_es = -0.5 # go for the collision
+    navigate_command = smart_nav(ship, ship.closest_point_to(enemy_ship, min_distance=dist_from_es), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+    return navigate_command
+
+def flock(ship, closest_fs):
+    cmd = smart_nav(ship, ship.closest_point_to(closest_fs, min_distance=0.5), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+    return cmd
+
+def approach_planet(ship, cd):
+    cmd = smart_nav(ship, ship.closest_point_to(cd, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+    return cmd
+
+
+# -------------- Command networking and caching ----------------- #
+
 def register_trajectory(ship, cmd):
     if cmd:
         split = cmd.split()
@@ -264,11 +345,21 @@ def register_command(ship, cmd, err=None):
         if err:
             logging.info(err)
 
+
+
+
+# -------------- Round logic ----------------- #
+
 trajectories = {}
 command_queue = []
-
 round_counter = 0
+
 while True:
+
+
+
+    # -------------- Setup ----------------- #
+
     game_map = game.update_map()
     round_counter += 1
     logging.info("processing game on frame %s" % (round_counter-1))
@@ -341,6 +432,10 @@ while True:
 
     logging.info("Time used during setup: %s" % (time.time() - start_time))
 
+
+
+    # -------------- Early game ----------------- #
+
     # get rid of early game collision
     if len(my_planets) < 1 and round_counter < 30:
         for i in range(0, len(free_ships)):
@@ -362,7 +457,9 @@ while True:
                     break
 
 
-    # Commands for ships
+
+    # -------------- Main game ----------------- #
+
     else:
         # calculate list of invaders
         invaders = set()
@@ -518,6 +615,7 @@ while True:
                 logging.info("weird... couln't find closest_es when no enemy planets")
 
     game.send_command_queue(command_queue)
+    """
     logging.info("Trajectories")
     for key in trajectories:
         logging.info("%s -- %s" % (key, trajectories[key]))
@@ -533,6 +631,7 @@ while True:
             speed = split[2]
             angle = split[3]
             logging.info("%s: thrust %s %s" % (shipid, speed, angle))
+    """
     time_used = time.time() - start_time
     logging.info("Time used: %f" % time_used)
     # TURN END
