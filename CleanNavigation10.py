@@ -168,14 +168,17 @@ def trajectories_intersect(line1, line2):
     return False
 
 def attack_ship(ship, enemy_ship, nav=2):
+    #navigate_command = ship.navigate2(ship.closest_point_to(enemy_ship, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     navigate_command = smart_nav(ship, ship.closest_point_to(enemy_ship, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return navigate_command
 
 def flock(ship, closest_fs):
+    #cmd = ship.navigate2(ship.closest_point_to(closest_fs, min_distance=0.5), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     cmd = smart_nav(ship, ship.closest_point_to(closest_fs, min_distance=0.5), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return cmd
 
 def approach_planet(ship, cd):
+    #cmd = ship.navigate2(ship.closest_point_to(cd, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     cmd = smart_nav(ship, ship.closest_point_to(cd, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return cmd
 
@@ -243,7 +246,7 @@ def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_correctio
     angle = ship.calculate_angle_between(target)
     return attempt_nav(ship, target, dist, angle, fs_trajectories)
 
-def register_trajectory(ship, cmd):
+def register_command(ship, cmd):
     if cmd:
         split = cmd.split()
         action = split[0]
@@ -254,15 +257,8 @@ def register_trajectory(ship, cmd):
             angle = split[3]
             trajectories[ship.id] = (ship.x, ship.y, ship.x+float(speed)*math.cos(math.radians(float(angle))), 
                     ship.y+float(speed)*math.sin(math.radians(float(angle))))
-        logging.info("registering trajectory for %s as %s" % (ship.id, trajectories[ship.id]))
 
-def register_command(ship, cmd, err=None):
-    if cmd:
-        command_queue.append(cmd)
-        register_trajectory(ship, cmd)
-    else:
-        if err:
-            logging.info(err)
+        logging.info("registering trajectory for %s as %s" % (ship.id, trajectories[ship.id]))
 
 trajectories = {}
 command_queue = []
@@ -353,11 +349,11 @@ while True:
                     # dock if we can
                     if ship.can_dock(cd):
                         cmd = ship.dock(cd)
+                        command_queue.append(cmd)
                         register_command(ship, cmd)
-                        logging.info("%s docking" % ship.id)
+                        logging.info("docking")
                     # approach with the same angle as the closest ship
                     else:
-                        """
                         cs = closest_ship_to_planet[cd][0][0]
                         angle = cs.calculate_angle_between(cd)
                         dist_to_surface = dist - cd.radius
@@ -374,8 +370,7 @@ while True:
                             angle = angle + angle_buffer
                             logging.info("will collide eventually, so changing angle by %s" % angle_buffer)
                         cmd = ship.thrust(speed, angle)
-                        """
-                        cmd = approach_planet(ship, cd)
+                        command_queue.append(cmd)
                         register_command(ship, cmd)
                     break
 
@@ -402,8 +397,8 @@ while True:
 
             
         for i in range(0, len(free_ships)):
-            if time.time() >= start_time + 1.4:
-                logging.info("1.4 s exceeded")
+            if time.time() >= start_time + 1.6:
+                logging.info("1.6 s exceeded")
                 break
             
             ship = free_ships[i]
@@ -412,8 +407,11 @@ while True:
             # 1. check if docked ships need defense
             if ship.id in defense_target:
                 cmd = attack_ship(ship, defense_target[ship.id])
-                err_msg = "ship %s couldn't move to attack invader %s" % (ship.id, defense_target[ship.id].id)
-                register_command(ship, cmd, err=err_msg)
+                if cmd:
+                    command_queue.append(cmd)
+                    register_command(ship, cmd)
+                else:
+                    logging.info("ship %s couldn't move to attack invader %s" % (ship.id, defense_target[ship.id].id))
                 continue
 
             # assess threat level
@@ -449,18 +447,19 @@ while True:
                 strength_score  += fs_score
             logging.info("%s has strength score: %s" % (ship.id, strength_score))
             
-            """
             if threat_score > strength_score:
                 logging.info("threat level too high, attempt to flock")
                 # add dist cap on closest_fs
                 if closest_fs and closest_dist < 40:
                     cmd = flock(ship, closest_fs)
-                    err_msg = "ship %s couldn't move towards ship %s" % (ship.id, closest_fs.id)
-                    register_command(ship, cmd, err=err_msg)
+                    if cmd:
+                        command_queue.append(cmd)
+                        register_command(ship, cmd)
+                    else:
+                        logging.info("ship %s couldn't move towards ship %s" % (ship.id, closest_fs.id))
                 else:
                     logging.info("JUKE CITY")
                 continue
-            """
 
             # 2. if there's an enemy near, go ham
             if ce:
@@ -474,8 +473,13 @@ while True:
 
                 if closest_eds and ship.calculate_distance_between(closest_eds) < 30:
                     cmd = attack_ship(ship, closest_eds)
-                    err_msg = "ship %s couldn't move to attack planet %s docked ship %s" % (ship.id, ce.id, closest_eds.id)
-                    register_command(ship, cmd, err=err_msg)
+                    if cmd:
+                        command_queue.append(cmd)
+                        register_command(ship, cmd)
+                    else:
+                        logging.info("ship %s couldn't move to attack planet %s docked ship %s" % (ship.id, ce.id, closest_eds.id))
+                        logging.info("attempt to move to es %s at location %s" % (ce.id, (ce.x, ce.y)))
+                        logging.info("angle %s dist %s" % (ship.calculate_angle_between(ce), ship.calculate_distance_between(ce)))
                     continue
 
             # 3. otherwise, go for closest nonenemy planet if it exists (in order of closeness)
@@ -493,19 +497,26 @@ while True:
                         # make sure we aren't close to an enemy ship when docking, smart dock
                         if es == None or ship.calculate_distance_between(es) > 30:
                             cmd = ship.dock(cd)
+                            command_queue.append(cmd)
                             register_command(ship, cmd)
-                            logging.info("%s docking" % ship.id)
+                            logging.info("docking")
                         # if an enemy ship is close, docking isn't safe, so go ham
                         else:
                             cmd = attack_ship(ship, es)
-                            err_msg = "ship %s couldn't move to attack ship %s" % (ship.id, es.id)
-                            register_command(ship, cmd, err=err_msg)
+                            if cmd:
+                                command_queue.append(cmd)
+                                register_command(ship, cmd)
+                            else:
+                                logging.info("ship %s couldn't move to attack ship %s" % (ship.id, es.id))
 
                     # go towards a position where we can dock
                     else:
                         cmd = approach_planet(ship, cd)
-                        err_msg = "ship %s couldn't move to planet %s" % (ship.id, cd.id)
-                        register_command(ship, cmd, err=err_msg)
+                        if cmd:
+                            command_queue.append(cmd)
+                            register_command(ship, cmd)
+                        else:
+                            logging.info("ship %s couldn't move to planet %s" % (ship.id, cd.id))
                     cont = True
                     break
             if cont:
@@ -516,8 +527,11 @@ while True:
             if len(enemy_planets) > 0:
                 target_planet = ep_attack
                 cmd = attack_docked_planet(ship, target_planet)
-                err_msg = "ship %s couldn't move to attack planet %s" % (ship.id, target_planet.id)
-                register_command(ship, cmd, err=err_msg)
+                if cmd:
+                    command_queue.append(cmd)
+                    register_command(ship, cmd)
+                else:
+                    logging.info("ship %s couldn't move to attack planet %s" % (ship.id, target_planet.id))
                 continue
 
             # 5. no more enemy planets (lol) so might as well go for enemy ships, already won at this point
@@ -530,13 +544,16 @@ while True:
                     closest_dist = dist
             if closest_es:
                 cmd = attack_ship(ship, closest_es)
-                err_msg = "ship %s couldn't move to attack closest ship %s" % (ship.id, closest_es.id)
-                register_command(ship, cmd, err=err_msg)
+                if cmd:
+                    command_queue.append(cmd)
+                    register_command(ship, cmd)
+                else:
+                    logging.info("ship %s couldn't move to attack closest ship %s" % (ship.id, closest_es.id))
             else:
                 logging.info("weird... couln't find closest_es when no enemy planets")
 
     game.send_command_queue(command_queue)
-    """
+    time_used = time.time() - start_time
     logging.info("Trajectories")
     for key in trajectories:
         logging.info("%s -- %s" % (key, trajectories[key]))
@@ -552,8 +569,6 @@ while True:
             speed = split[2]
             angle = split[3]
             logging.info("%s: thrust %s %s" % (shipid, speed, angle))
-    """
-    time_used = time.time() - start_time
     logging.info("Time used: %f" % time_used)
     # TURN END
 # GAME END
