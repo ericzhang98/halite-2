@@ -357,24 +357,6 @@ while True:
                         logging.info("%s docking" % ship.id)
                     # approach with the same angle as the closest ship
                     else:
-                        """
-                        cs = closest_ship_to_planet[cd][0][0]
-                        angle = cs.calculate_angle_between(cd)
-                        dist_to_surface = dist - cd.radius
-                        logging.info("dist to surface: %s" % dist_to_surface)
-                        # extra -1 buffer to round dist_to_surface down
-                        speed = 7 if dist_to_surface >= 8 else dist_to_surface-1
-                        angle_to_cs = ship.calculate_angle_between(cs) - angle
-                        dx = ship.x - cs.x
-                        dy = ship.y - cs.y
-                        fake_target = hlt.entity.Entity(cd.x+dx, cd.y+dy, 0, None, None, None)
-                        if game_map.obstacles_between(ship, fake_target, (hlt.entity.Planet)):
-                            # if angle_to_cs is positive(starboard) change angle by -5(port), if negative(port) change angle by 5(starboard)
-                            angle_buffer = -10 if angle_to_cs >= 0 else 10
-                            angle = angle + angle_buffer
-                            logging.info("will collide eventually, so changing angle by %s" % angle_buffer)
-                        cmd = ship.thrust(speed, angle)
-                        """
                         cmd = approach_planet(ship, cd)
                         register_command(ship, cmd)
                     break
@@ -536,7 +518,6 @@ while True:
                 logging.info("weird... couln't find closest_es when no enemy planets")
 
     game.send_command_queue(command_queue)
-    """
     logging.info("Trajectories")
     for key in trajectories:
         logging.info("%s -- %s" % (key, trajectories[key]))
@@ -552,7 +533,6 @@ while True:
             speed = split[2]
             angle = split[3]
             logging.info("%s: thrust %s %s" % (shipid, speed, angle))
-    """
     time_used = time.time() - start_time
     logging.info("Time used: %f" % time_used)
     # TURN END

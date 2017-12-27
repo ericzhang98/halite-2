@@ -518,7 +518,6 @@ while True:
                 logging.info("weird... couln't find closest_es when no enemy planets")
 
     game.send_command_queue(command_queue)
-    """
     logging.info("Trajectories")
     for key in trajectories:
         logging.info("%s -- %s" % (key, trajectories[key]))
@@ -534,7 +533,6 @@ while True:
             speed = split[2]
             angle = split[3]
             logging.info("%s: thrust %s %s" % (shipid, speed, angle))
-    """
     time_used = time.time() - start_time
     logging.info("Time used: %f" % time_used)
     # TURN END
