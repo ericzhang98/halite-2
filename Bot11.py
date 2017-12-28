@@ -47,18 +47,6 @@ def closest_enemy_ship(ship, me):
                 return entity
     return None
 
-def closest_enemy_ships_dist(ship, me, dist=100, sort=False):
-    enemy_ships_dist = []
-    entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in sorted(entities_by_distance):
-        if distance < dist:
-            for entity in entities_by_distance[distance]:
-                if isinstance(entity, hlt.entity.Ship) and entity.owner != me:
-                    enemy_ships_dist.append((entity, distance))
-    if sort:
-        enemy_ships_dist.sort(key = lambda tup: tup[1])
-    return enemy_ships_dist
-
 def closest_enemy_free_ship(ship, me):
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
     for distance in sorted(entities_by_distance):
@@ -67,13 +55,13 @@ def closest_enemy_free_ship(ship, me):
                 return entity
     return None
 
-def closest_enemy_free_ships_dist(ship, me, dist=100, sort=False):
+def closest_enemy_ships_dist(ship, me, dist=100, sort=False):
     enemy_ships_dist = []
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
     for distance in sorted(entities_by_distance):
         if distance < dist:
             for entity in entities_by_distance[distance]:
-                if isinstance(entity, hlt.entity.Ship) and entity.owner != me and entity.docking_status == ship.DockingStatus.UNDOCKED:
+                if isinstance(entity, hlt.entity.Ship) and entity.owner != me:
                     enemy_ships_dist.append((entity, distance))
     if sort:
         enemy_ships_dist.sort(key = lambda tup: tup[1])
@@ -317,11 +305,10 @@ def attack_docked_planet(ship, planet, nav=2):
     return attack_ship(ship, target_ship, nav)
 
 def attack_ship(ship, enemy_ship, nav=2):
-    dist_from_es = 0
-    num_free_es_4 = len(closest_enemy_free_ships_dist(ship, me, dist=4))
-    if enemy_ship.docking_status != ship.DockingStatus.UNDOCKED:
-        dist_from_es = 1
-    if ship.health < 64 and num_free_es_4 > 0:
+    dist_from_es = 2
+    if ship.health < 128:
+        dist_from_es = 0.1 # might as well go closer to get hit in place of more healthy ships
+    if ship.health < 64:
         dist_from_es = -0.5 # go for the collision
     navigate_command = smart_nav(ship, ship.closest_point_to(enemy_ship, min_distance=dist_from_es), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return navigate_command
