@@ -111,46 +111,6 @@ def collide_entity(ship, entity):
 
 # -------------- Geometry ----------------- #
 
-def lines_intersect(line1, line2):
-    # todo: have to make two new lines for each one, 0.5 apart and check for those intersections
-    logging.info("checking intersection: %s %s" % (line1, line2))
-    startx_1, starty_1, endx_1, endy_1 = line1[0], line1[1], line1[2], line1[3]
-    startx_2, starty_2, endx_2, endy_2 = line2[0], line2[1], line2[2], line2[3]
-    dy_1 = endy_1 - starty_1
-    dx_1 = endx_1 - startx_1
-    if dx_1 < 0.1 and dx_1 >= 0:
-        dx_1 = 0.1
-    if dx_1 > -0.1 and dx_1 < 0:
-        dx_1 = -0.1
-    slope_1 = dy_1/dx_1
-    b_1 = starty_1 - slope_1*startx_1
-    dy_2 = endy_2 - starty_2
-    dx_2 = endx_2 - startx_2
-    if dx_2 < 0.1 and dx_2 >= 0:
-        dx_2 = 0.1
-    if dx_2 > -0.1 and dx_2 < 0:
-        dx_2 = -0.1
-    slope_2 = dy_2/dx_2
-    b_2 = starty_2 - slope_2*startx_2
-    logging.info("slope, b for 1: (%s, %s)" % (slope_1, b_1))
-    logging.info("slope, b for 2: (%s, %s)" % (slope_2, b_2))
-    if abs(slope_1 - slope_2) < 0.0001:
-        if abs(b_1 - b_2) < 0.5:
-            if ((startx_1+0.5 > startx_2 and startx_1-0.5 < endx_2) or (startx_1-0.5 < startx_2 and startx_1+0.5 > endx_2) or
-                    (endx_1+0.5 > startx_2 and endx_1-0.5 < endx_2) or (endx_1-0.5 < startx_2 and endx_1+0.5 > endx_2) or
-                    (startx_2+0.5 > startx_1 and startx_2-0.5 < endx_1) or (startx_2-0.5 < startx_1 and startx_2+0.5 > endx_1) or
-                    (endx_2+0.5 > startx_1 and endx_2-0.5 < endx_1) or (endx_2-0.5 < startx_1 and endx_2+0.5 > endx_1)):
-                return True
-            else:
-                return False
-    else:
-        x_intersection = (b_2-b_1)/(slope_1-slope_2)
-        if ((min(startx_1, endx_1)-0.5 < x_intersection and x_intersection < max(startx_1, endx_1)+0.5) and
-                (min(startx_2, endx_2)-0.5 < x_intersection and x_intersection < max(startx_2, endx_2)+0.5)):
-            return True
-        else:
-            return False
-
 # returns list of ships within dist and planet with surfaces within dist, extra fudge of 0.6
 def entities_within_distance(ship, dist):
     entities = []
@@ -274,7 +234,7 @@ def attempt_nav(ship, target, dist, angle, trajectories, max_corrections=179, an
         angle = 360+angle
     # fastest path around planets is the closest to a straight line
     if not game_map.obstacles_between(ship, target, (hlt.entity.Ship)):
-        logging.info("attempting end point: (%s, %s)" % (target.x, target.y))
+        #logging.info("attempting end point: (%s, %s)" % (target.x, target.y))
         # will only return with cmd if it doesn't hit other trajectories
         cmd = move_ship(ship, dist, angle, trajectories)
         if cmd:
@@ -291,7 +251,7 @@ def attempt_nav(ship, target, dist, angle, trajectories, max_corrections=179, an
 # without hitting the trajectories of other friendly ships or planets
 def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_corrections=179, angular_step=1,
     ignore_ships=False, ignore_planets=False):
-    logging.info("ATTEMPTING SMART NAV FOR %s AT %s" % (ship.id, (ship.x, ship.y)))
+    logging.info("ATTEMPTING SMART NAV FOR %s AT %s TO %s" % (ship.id, (ship.x, ship.y), (target.x, target.y)))
     logging.info("trajectories:")
     fs_trajectories = []
     close_fs = [fs for fs in entities_within_distance(ship, 15) if (isinstance(fs, hlt.entity.Ship) and fs.owner == me)]
@@ -334,6 +294,15 @@ def approach_planet(ship, cd):
     cmd = smart_nav(ship, ship.closest_point_to(cd, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return cmd
 
+def juke_city(ship, me):
+    juke_x = 3 if ship.x < map_width/2 else map_width-3
+    juke_y = 3 if ship.y < map_height/2 else map_height-3
+    juke_x = max(3, min(map_width-3, juke_x))
+    juke_y = max(3, min(map_height-3, juke_y))
+    juke_target = hlt.entity.Position(juke_x, juke_y)
+    cmd = smart_nav(ship, juke_target, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+    return cmd
+
 
 # -------------- Command networking and caching ----------------- #
 
@@ -363,9 +332,51 @@ def register_command(ship, cmd, err=None):
 
 # -------------- Round logic ----------------- #
 
+game_map = game.initial_map
+two_player = len(game_map.all_players()) == 2
+map_width = game_map.width
+map_height = game_map.height
+me = game_map.get_me()
+
 trajectories = {}
 command_queue = []
 round_counter = 0
+
+dogfighting = False
+if two_player:
+    enemy_player = [p for p in game_map.all_players() if p != me][0]
+    enemy_ships = [ship for ship in game_map._all_ships() if ship.owner != me]
+    es_x = 0
+    es_y = 0
+    cd_es = []
+    for es in enemy_ships:
+        es_x += es.x
+        es_y += es.y
+        logging.info(closest_dockable_planet(es, me))
+        cd_es.append(closest_dockable_planet(es, me))
+    es_x = es_x/len(enemy_ships)
+    es_y = es_y/len(enemy_ships)
+
+    friendly_ships = me.all_ships()
+    fs_x = 0
+    fs_y = 0
+    for fs in friendly_ships:
+        fs_x += fs.x
+        fs_y += fs.y
+    fs_x = fs_x/len(friendly_ships)
+    fs_y = fs_y/len(friendly_ships)
+
+    es_center = hlt.entity.Position(es_x, es_y)
+    fs_center = hlt.entity.Position(fs_x, fs_y)
+
+    fs_es_dist = fs_center.calculate_distance_between(es_center)
+
+    # don't attack if they're gonna be bunched up in a 3-spot planet
+    same_planet = (cd_es[0].id == cd_es[1].id) and (cd_es[1].id == cd_es[2].id) and (cd_es[0].num_docking_spots >= 3)
+
+    if fs_es_dist <= 120 and not same_planet:
+        dogfighting = True
+    
 
 while True:
 
@@ -374,19 +385,16 @@ while True:
     # -------------- Setup ----------------- #
 
     game_map = game.update_map()
+    me = game_map.get_me()
     round_counter += 1
     logging.info("processing game on frame %s" % (round_counter-1))
     start_time = time.time()
-    me = game_map.get_me()
-    two_player = len(game_map.all_players()) == 2
-    map_width = game_map.width
-    map_height = game_map.height
     
     trajectories = {}
     command_queue = []
 
     # ship and planet lists
-    friendly_ships = game_map.get_me().all_ships() # Don't use friendly_ships since it includes docked ships
+    friendly_ships = me.all_ships()
     free_ships = [ship for ship in friendly_ships if ship.docking_status == ship.DockingStatus.UNDOCKED]
     docked_ships = [ship for ship in friendly_ships if ship.docking_status != ship.DockingStatus.UNDOCKED]
     enemy_ships = [ship for ship in game_map._all_ships() if ship.owner != me]
@@ -399,9 +407,8 @@ while True:
     for fs in friendly_ships:
         trajectories[fs.id] = (fs.x, fs.y, fs.x, fs.y)
 
-    # build closest ship lists and engage distance thresholds for all planets
-    closest_ship_to_planet = {}
-    planet_threshold = {}
+    # build closest ship lists
+    closest_ship_to_planet = {} # closest_ship_to_planet[planet] = [(ship, ship dist)...]
     for p in all_planets:
         ship_dists = []
         for s in free_ships:
@@ -409,15 +416,19 @@ while True:
         ship_dists.sort(key = lambda tup: tup[1])
         closest_ship_to_planet[p] = ship_dists
 
-        EXTRA = 0
+    # engage docking distance thresholds for all planets
+    planet_threshold = {}
+    EXTRA = 0
+    for p in all_planets:
         planet_threshold[p] = 999999999
+        ship_dists = closest_ship_to_planet[p]
         if len(ship_dists) > 0:
             num_free_spots = p.num_docking_spots - len(p.all_docked_ships())
             threshold_index = num_free_spots-1+EXTRA if num_free_spots-1+EXTRA < len(ship_dists) else len(ship_dists)-1
             planet_threshold[p] = ship_dists[threshold_index][1] #genius
 
     # find weighted planet center
-    pc = hlt.entity.Entity(game_map.width/2, game_map.height/2, 0, None, None, None)
+    pc = hlt.entity.Entity(map_width/2, map_height/2, 0, None, None, None)
     total_x = 0
     total_y = 0
     num_docked = 0
@@ -434,14 +445,28 @@ while True:
 
     # build priority level for attacking enemy planets based on planet center
     ep_priority = []
-    ep_attack = None
+    for ep in enemy_planets:
+        dist = pc.calculate_distance_between(ep)
+        ep_priority.append((ep, dist))
+    ep_priority.sort(key = lambda tup: tup[1])
+
+    # engage attacking distance thresholds for enemy planets for 4-player games
+    attack_threshold = {}
+    ep_attack_1 = None
     if len(enemy_planets) > 0:
-        for ep in enemy_planets:
-            dist = pc.calculate_distance_between(ep)
-            ep_priority.append((ep, dist))
-        ep_priority.sort(key = lambda tup: tup[1])
-        ep_attack = ep_priority[0][0]
-        logging.info("Priority ep: %s with dist %s" % (ep_attack.id, ep_priority[0][1]))
+        ep_attack_1 = ep_priority[0][0]
+        logging.info("Priority ep1: %s with dist %s" % (ep_attack_1.id, ep_priority[0][1]))
+        ship_dists = closest_ship_to_planet[ep_attack_1]
+        if len(ship_dists) > 0:
+            attack_threshold[ep_attack_1] = ship_dists[int(len(ship_dists)/2)][1]
+
+    ep_attack_2 = None
+    if len(enemy_planets) > 1:
+        ep_attack_2 = ep_priority[1][0]
+        logging.info("Priority ep2: %s with dist %s" % (ep_attack_2.id, ep_priority[1][1]))
+        ship_dists = closest_ship_to_planet[ep_attack_2]
+        if len(ship_dists) > 0:
+            attack_threshold[ep_attack_2] = ship_dists[int(len(ship_dists)/2)][1]
 
     logging.info("Time used during setup: %s" % (time.time() - start_time))
 
@@ -449,25 +474,33 @@ while True:
 
     # -------------- Early game ----------------- #
 
+    early_game = (len(my_planets) < 1 and round_counter < 30) or dogfighting
     # get rid of early game collision
-    if len(my_planets) < 1 and round_counter < 30:
-        for i in range(0, len(free_ships)):
-            ship = free_ships[i]
-            # in order of closeness for dockable planets
-            for cd in closest_dockable_planet_list(ship, me):
-                dist = ship.calculate_distance_between(cd)
-                # only send dockable number of ships
-                if dist <= planet_threshold[cd]:
-                    # dock if we can
-                    if ship.can_dock(cd):
-                        cmd = ship.dock(cd)
-                        register_command(ship, cmd)
-                        logging.info("%s docking" % ship.id)
-                    # approach with the same angle as the closest ship
-                    else:
-                        cmd = approach_planet(ship, cd)
-                        register_command(ship, cmd)
-                    break
+    if early_game:
+        if not dogfighting:
+            for ship in free_ships:
+                # in order of closeness for dockable planets
+                for cd in closest_dockable_planet_list(ship, me):
+                    dist = ship.calculate_distance_between(cd)
+                    # only send dockable number of ships
+                    if dist <= planet_threshold[cd]:
+                        # dock if we can
+                        if ship.can_dock(cd):
+                            cmd = ship.dock(cd)
+                            register_command(ship, cmd)
+                            logging.info("%s docking" % ship.id)
+                        # approach with the same angle as the closest ship
+                        else:
+                            cmd = approach_planet(ship, cd)
+                            register_command(ship, cmd)
+                        break
+        if two_player and dogfighting:
+            for ship in free_ships:
+                closest_es = closest_enemy_ship(ship, me)
+                logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
+                cmd = attack_ship(ship, closest_es)
+                err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
+                register_command(ship, cmd, err=err_msg)
 
 
 
@@ -492,14 +525,44 @@ while True:
         # calculate squads
         squad = {}
 
+
+        # check if we should run away in 4-player games
+        runaway = False
+        if not two_player:
+            if round_counter >= 100:
+                num_planets_owned = len(game_map.planets_for_player(me))
+                for p in game_map.all_players():
+                    if len(game_map.planets_for_player(p)) > 2*num_planets_owned:
+                        logging.info("aborting offense, juke city time")
+                        runaway = True
             
+
+        # run away if conditions in a 4-player game are met
+        if runaway:
+            for i in range(0,  len(docked_ships)):
+                ship = docked_ships[i]
+                cmd = ship.undock()
+                register_command(ship, cmd)
+            docked_ships = {}
+            for i in range(0, len(free_ships)):
+                if time.time() >= start_time + 1.4:
+                    logging.info("1.4 s exceeded")
+                    break
+                ship = free_ships[i]
+                cmd = juke_city(ship, me)
+                register_command(ship, cmd)
+            free_ships = {}
+
+
+
+        # main loop across free_ships
         for i in range(0, len(free_ships)):
             if time.time() >= start_time + 1.4:
                 logging.info("1.4 s exceeded")
                 break
             
             ship = free_ships[i]
-            ce = closest_enemy_planet(ship, me)
+
 
             # 1. check if docked ships need defense
             if ship.id in defense_target:
@@ -508,6 +571,7 @@ while True:
                 register_command(ship, cmd, err=err_msg)
                 continue
 
+            """
             # assess threat level
             threat_score = 0
             closest_es_dist = closest_enemy_ships_dist(ship, me)
@@ -541,7 +605,6 @@ while True:
                 strength_score  += fs_score
             logging.info("%s has strength score: %s" % (ship.id, strength_score))
             
-            """
             if threat_score > strength_score:
                 logging.info("threat level too high, attempt to flock")
                 # add dist cap on closest_fs
@@ -555,7 +618,10 @@ while True:
             """
 
             # 2. if there's an enemy near, go ham
+            max_ham_distance = 30
+            ce = closest_enemy_planet(ship, me)
             if ce:
+                # find closest docked ship on ce
                 closest_eds = None
                 closest_dist = 999999999
                 for eds in ce.all_docked_ships():
@@ -564,7 +630,7 @@ while True:
                         closest_eds = eds
                         closest_dist = dist
 
-                if closest_eds and ship.calculate_distance_between(closest_eds) < 30:
+                if closest_eds and ship.calculate_distance_between(closest_eds) <= max_ham_distance:
                     cmd = attack_ship(ship, closest_eds)
                     err_msg = "ship %s couldn't move to attack planet %s docked ship %s" % (ship.id, ce.id, closest_eds.id)
                     register_command(ship, cmd, err=err_msg)
@@ -572,12 +638,13 @@ while True:
 
             # 3. otherwise, go for closest nonenemy planet if it exists (in order of closeness)
             cont = False
+            max_explore_distance = 100 if two_player else 50
             for cd in closest_dockable_planet_list(ship, me):
                 # only go if ship is nth closest or closer (n = num docking spots left) or we make single ship investment if num free_ships > 5
                 dist = ship.calculate_distance_between(cd)
                 threshold = planet_threshold[cd]
                 investment_threshold = closest_ship_to_planet[cd][0][1]
-                if (dist <= threshold and dist <= 100) or (dist <= investment_threshold and not cd.is_owned() and len(free_ships) > 5):
+                if (dist <= threshold and dist <= max_explore_distance) or (dist <= investment_threshold and not cd.is_owned() and len(free_ships) > 5):
 
                     # consider docking if we can dock
                     if ship.can_dock(cd):
@@ -605,12 +672,33 @@ while True:
 
             # 4. no close nonenemy planets to fill up, go ham on enemy
             # go for planet closest to center of my planets
-            if len(enemy_planets) > 0:
-                target_planet = ep_attack
-                cmd = attack_docked_planet(ship, target_planet)
-                err_msg = "ship %s couldn't move to attack planet %s" % (ship.id, target_planet.id)
-                register_command(ship, cmd, err=err_msg)
-                continue
+            if two_player:
+                if len(enemy_planets) > 0:
+                    target_planet = ep_attack_1
+                    cmd = attack_docked_planet(ship, target_planet)
+                    err_msg = "ship %s couldn't move to attack planet %s" % (ship.id, target_planet.id)
+                    register_command(ship, cmd, err=err_msg)
+                    continue
+            else:
+                if len(enemy_planets) > 0:
+                    target_planet = ep_attack_1
+                    dist = ship.calculate_distance_between(target_planet)
+                    threshold = attack_threshold[target_planet]
+                    if dist <= threshold:
+                        cmd = attack_docked_planet(ship, target_planet)
+                        err_msg = "ship %s couldn't move to attack planet %s" % (ship.id, target_planet.id)
+                        register_command(ship, cmd, err=err_msg)
+                        continue
+
+                if len(enemy_planets) > 1:
+                    target_planet = ep_attack_2
+                    dist = ship.calculate_distance_between(target_planet)
+                    threshold = attack_threshold[target_planet]
+                    if dist <= threshold:
+                        cmd = attack_docked_planet(ship, target_planet)
+                        err_msg = "ship %s couldn't move to attack planet %s" % (ship.id, target_planet.id)
+                        register_command(ship, cmd, err=err_msg)
+                        continue
 
             # 5. no more enemy planets (lol) so might as well go for enemy ships, already won at this point
             closest_es = None

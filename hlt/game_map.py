@@ -59,6 +59,13 @@ class Map:
         """
         return list(self._planets.values())
 
+    def planets_for_player(self, player):
+        planets = []
+        for planet in self.all_planets():
+            if planet.owner and planet.owner.id == player.id:
+                planets.append(planet)
+        return planets
+
     def nearby_entities_by_distance(self, entity):
         """
         :param entity: The source entity to find distances from
