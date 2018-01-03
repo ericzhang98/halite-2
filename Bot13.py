@@ -294,71 +294,11 @@ def approach_planet(ship, cd):
     cmd = smart_nav(ship, ship.closest_point_to(cd, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return cmd
 
-def corner_city(ship, me):
+def juke_city(ship, me):
     juke_x = 3 if ship.x < map_width/2 else map_width-3
     juke_y = 3 if ship.y < map_height/2 else map_height-3
     juke_x = max(3, min(map_width-3, juke_x))
     juke_y = max(3, min(map_height-3, juke_y))
-    juke_target = hlt.entity.Position(juke_x, juke_y)
-    cmd = smart_nav(ship, juke_target, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-    return cmd
-
-def juke_city(ship, me):
-    efs_x = 0
-    efs_y = 0
-    efs = closest_enemy_free_ships_dist(ship, me, dist=20)
-    if len(efs) == 0:
-        return None
-    for e in efs:
-        efs_x += e[0].x
-        efs_y += e[0].y
-    efs_x = efs_x/len(efs)
-    efs_y = efs_y/len(efs)
-    efs_pos = hlt.entity.Position(efs_x, efs_y)
-    efs_ang = ship.calculate_angle_between(efs_pos)
-    juke_ang = (180+efs_ang) % 360
-    x_amt = 7*math.cos(math.radians(juke_ang))
-    y_amt = 7*math.sin(math.radians(juke_ang))
-    juke_x = ship.x + x_amt
-    juke_y = ship.y + y_amt
-
-    overshoot_x = juke_x - max(0, min(map_width, juke_x))
-    overshoot_y = juke_y - max(0, min(map_height, juke_y))
-
-    # overshooting both x and y (near corner)
-    if abs(overshoot_x) > 0 and abs(overshoot_y) > 0:
-        # mainly vertical
-        if abs(y_amt) > abs(x_amt):
-            dy = y_amt - overshoot_y
-            dx = math.sqrt(49 - dy**2 + 0.0001)
-            sign = 1 if x_amt < 0 else -1
-            juke_x = ship.x + sign*dx
-            juke_y = ship.y + dy
-        # mainly horizontal
-        else:
-            dx = x_amt - overshoot_x
-            dy = math.sqrt(49 - dx**2 + 0.0001)
-            sign = 1 if y_amt < 0 else -1
-            juke_x = ship.x + dx
-            juke_y = ship.y + sign*dy
-
-    # overshooting x only (near left or right)
-    elif abs(overshoot_x) > 0:
-        dx = x_amt - overshoot_x
-        dy = math.sqrt(49 - dx**2 + 0.0001)
-        sign = -1 if abs(270-juke_ang) <= 90 else 1
-        juke_x = ship.x + dx
-        juke_y = ship.y + sign*dy
-    # overshooting y only (near up or down)
-    elif abs(overshoot_y) > 0:
-        dy = y_amt - overshoot_y
-        dx = math.sqrt(49 - dy**2 + 0.0001)
-        sign = -1 if abs(180-juke_ang) <= 90 else 1
-        juke_x = ship.x + sign*dx
-        juke_y = ship.y + dy
-
-    juke_x = max(1, min(map_width-1, juke_x))
-    juke_y = max(1, min(map_height-1, juke_y))
     juke_target = hlt.entity.Position(juke_x, juke_y)
     cmd = smart_nav(ship, juke_target, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return cmd
@@ -528,47 +468,6 @@ while True:
         if len(ship_dists) > 0:
             attack_threshold[ep_attack_2] = ship_dists[int(len(ship_dists)/2)][1]
 
-
-    threat_scores = {}
-    strength_scores = {}
-    closest_friendlies = {}
-    for i in range(len(friendly_ships)):
-        ship = friendly_ships[i]
-        # do threat/strength scores
-        # assess threat level
-        threat_score = 0
-        closest_es_dist = closest_enemy_ships_dist(ship, me, dist=20)
-        has_undocked = False
-        for es_dist in closest_es_dist:
-            es_score = es_dist[0].health
-            # 1/4 the threat level of docked ships
-            if es_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
-                es_score = float(es_score)/4
-            else:
-                has_undocked = True
-            threat_score  += es_score
-        # no undocked ships means no threat, might as well try to kill a docked ship
-        if not has_undocked:
-            threat_score = 0
-        logging.info("%s has threat score: %s" % (ship.id, threat_score))
-        threat_scores[ship.id] = threat_score
-
-        # assess strength level
-        strength_score = 0 # avoid 1 v 1
-        closest_fs_dist = closest_friendly_ships_dist(ship, me, dist=10)
-        for fs_dist in closest_fs_dist:
-            fs_score = fs_dist[0].health
-            # 1/4 the threat level of docked ships
-            if fs_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
-                fs_score = float(fs_score)/4
-            strength_score  += fs_score
-        logging.info("%s has strength score: %s" % (ship.id, strength_score))
-        strength_scores[ship.id] = strength_score
-
-        # save closest friendlies
-        closest_friendlies[ship.id] = closest_friendly_ships_dist(ship, me, dist=40, sort=True)
-
-
     logging.info("Time used during setup: %s" % (time.time() - start_time))
 
 
@@ -623,43 +522,47 @@ while True:
                 logging.info("assigning %s to defend against %s" % (closest_free.id, invader.id))
         logging.info("Time used after defense check: %s" % (time.time() - start_time))
 
+        # calculate squads
+        squad = {}
+
+
         # check if we should run away in 4-player games
         runaway = False
         if not two_player:
-            if round_counter >= 80:
+            if round_counter >= 100:
                 num_planets_owned = len(game_map.planets_for_player(me))
                 for p in game_map.all_players():
                     if len(game_map.planets_for_player(p)) > 2*num_planets_owned:
                         logging.info("aborting offense, juke city time")
                         runaway = True
             
+
         # run away if conditions in a 4-player game are met
         if runaway:
-            for i in range(len(docked_ships)):
+            for i in range(0,  len(docked_ships)):
                 ship = docked_ships[i]
                 cmd = ship.undock()
                 register_command(ship, cmd)
             docked_ships = {}
-            for i in range(len(free_ships)):
+            for i in range(0, len(free_ships)):
                 if time.time() >= start_time + 1.4:
                     logging.info("1.4 s exceeded")
                     break
                 ship = free_ships[i]
-                efs = closest_enemy_free_ships_dist(ship, me, dist=20)
-                fs = closest_friendly_ships_dist(ship, me, dist=3)
-                cmd = corner_city(ship, cmd) if len(efs) == 0 or len(fs) > 0 else juke_city(ship, cmd)
+                cmd = juke_city(ship, me)
                 register_command(ship, cmd)
             free_ships = {}
 
 
 
         # main loop across free_ships
-        for i in range(len(free_ships)):
+        for i in range(0, len(free_ships)):
             if time.time() >= start_time + 1.4:
                 logging.info("1.4 s exceeded")
                 break
             
             ship = free_ships[i]
+
 
             # 1. check if docked ships need defense
             if ship.id in defense_target:
@@ -668,32 +571,51 @@ while True:
                 register_command(ship, cmd, err=err_msg)
                 continue
 
-            # check if we need to back off and swarm
-            threat_score = threat_scores[ship.id]
-            strength_score = strength_scores[ship.id]
+            """
+            # assess threat level
+            threat_score = 0
+            closest_es_dist = closest_enemy_ships_dist(ship, me)
+            has_undocked = False
+            for es_dist in closest_es_dist:
+                es_score = 100 - es_dist[1]
+                # 1/4 the threat level of docked ships
+                if es_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
+                    es_score = float(es_score)/4
+                else:
+                    has_undocked = True
+                threat_score  += es_score
+            # no undocked ships means no threat, might as well try to kill a docked ship
+            if not has_undocked:
+                threat_score = 0
+            logging.info("%s has threat score: %s" % (ship.id, threat_score))
+
+            # assess strength level
+            strength_score = 0 # avoid 1 v 1
+            closest_fs_dist = closest_friendly_ships_dist(ship, me)
+            closest_fs = None
+            closest_dist = 999999999
+            for fs_dist in closest_fs_dist:
+                fs_score = 100 - fs_dist[1]
+                # 1/4 the threat level of docked ships
+                if fs_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
+                    fs_score = float(fs_score)/4
+                if fs_dist[1] < closest_dist:
+                    closest_dist = fs_dist[1]
+                    closest_fs = fs_dist[0]
+                strength_score  += fs_score
+            logging.info("%s has strength score: %s" % (ship.id, strength_score))
+            
             if threat_score > strength_score:
                 logging.info("threat level too high, attempt to flock")
-                cf_dists = closest_friendlies[ship.id]
-                # want to choose the closest friendly that has strength > threat
-                swarm_ship = None
-                for cf_tup in cf_dists:
-                    cf_ship = cf_tup[0]
-                    cf_strength = strength_scores[cf_ship.id]
-                    cf_threat = threat_scores[cf_ship.id]
-                    if cf_strength > cf_threat:
-                        swarm_ship = cf_ship
-                        break
-                # go towards closest friendly with strength > threat (range capped at 40)
-                if swarm_ship:
-                    cmd = flock(ship, swarm_ship)
-                    err_msg = "ship %s couldn't move towards ship %s" % (ship.id, swarm_ship.id)
+                # add dist cap on closest_fs
+                if closest_fs and closest_dist < 40:
+                    cmd = flock(ship, closest_fs)
+                    err_msg = "ship %s couldn't move towards ship %s" % (ship.id, closest_fs.id)
                     register_command(ship, cmd, err=err_msg)
-                # otherwise juke city
                 else:
-                    cmd = juke_city(ship, me)
-                    register_command(ship, cmd, err=err_msg)
                     logging.info("JUKE CITY")
                 continue
+            """
 
             # 2. if there's an enemy near, go ham
             max_ham_distance = 30
