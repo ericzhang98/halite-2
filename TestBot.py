@@ -405,6 +405,7 @@ trajectories = {}
 command_dict = {}
 round_counter = 0
 early_game = True
+err_msg = "no crash plz"
 
 dogfighting = False
 if two_player:
@@ -628,18 +629,6 @@ while True:
                 defense_target[closest_free.id] = invader
                 logging.info("assigning %s to defend against %s" % (closest_free.id, invader.id))
 
-        # calculate threatened ships
-        threatened_ships = []
-        for i in range(len(free_ships)):
-            ship = free_ships[i]
-            threat_score = threat_scores[ship.id]
-            strength_score = strength_scores[ship.id]
-            if threat_score > strength_score:
-                logging.info("threat level too high, %s will attempt to flock" % ship.id)
-                threatened_ships.append(ship)
-                # remove from free ships
-                free_ships[i] = None
-
         # check if we should run away in 4-player games
         runaway = False
         if not two_player:
@@ -669,6 +658,17 @@ while True:
             free_ships = []
 
 
+        # calculate threatened ships
+        threatened_ships = []
+        for i in range(len(free_ships)):
+            ship = free_ships[i]
+            threat_score = threat_scores[ship.id]
+            strength_score = strength_scores[ship.id]
+            if threat_score > strength_score:
+                logging.info("threat level too high, %s will attempt to flock" % ship.id)
+                threatened_ships.append(ship)
+                # remove from free ships
+                free_ships[i] = None
 
         # main loop across free_ships (non threatened)
         for i in range(len(free_ships)):
@@ -808,6 +808,7 @@ while True:
             # otherwise juke city
             else:
                 cmd = juke_city(ship, me)
+                err_msg = "attempt juke city"
                 register_command(ship, cmd, err=err_msg)
                 logging.info("JUKE CITY")
 
