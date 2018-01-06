@@ -544,7 +544,7 @@ while True:
         closest_es_dist = closest_enemy_ships_dist(ship, me, dist=20)
         has_undocked = False
         for es_dist in closest_es_dist:
-            es_score = 1
+            es_score = es_dist[0].health
             # 1/4 the threat level of docked ships
             if es_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
                 es_score = float(es_score)/4
@@ -558,10 +558,10 @@ while True:
         threat_scores[ship.id] = threat_score
 
         # assess strength level
-        strength_score = 1
+        strength_score = ship.health
         closest_fs_dist = closest_friendly_ships_dist(ship, me, dist=5)
         for fs_dist in closest_fs_dist:
-            fs_score = 1
+            fs_score = fs_dist[0].health
             # 1/4 the threat level of docked ships
             if fs_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
                 fs_score = float(fs_score)/4

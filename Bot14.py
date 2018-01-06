@@ -6,6 +6,14 @@ import math
 game = hlt.Game("ezboi")
 logging.info("Starting my dope bot!")
 
+def closest_planet(ship):
+    entities_by_distance = game_map.nearby_entities_by_distance(ship)
+    for distance in sorted(entities_by_distance):
+        for entity in entities_by_distance[distance]:
+            if isinstance(entity, hlt.entity.Planet):
+                return entity
+    return None
+
 def closest_dockable_planet(ship, me):
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
     for distance in sorted(entities_by_distance):
@@ -279,19 +287,8 @@ def attack_ship(ship, enemy_ship, nav=2):
     return navigate_command
 
 def flock(ship, closest_fs):
-    cmd = smart_nav(ship, ship.closest_point_to(closest_fs, min_distance=0.01), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+    cmd = smart_nav(ship, ship.closest_point_to(closest_fs, min_distance=0.5), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return cmd
-
-def flock_pos(ship, pos):
-    cmd = smart_nav(ship, pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-    return cmd
-
-def flock_trajectory(ship, fs):
-    fs_tra = trajectories[fs.id]
-    end_x = fs_tra[2]
-    end_y = fs_tra[3]
-    end_pos = hlt.entity.Position(end_x, end_y)
-    return flock_pos(ship, end_pos)
 
 def approach_planet(ship, cd):
     cmd = smart_nav(ship, ship.closest_point_to(cd, min_distance=0), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
@@ -325,8 +322,8 @@ def juke_city(ship, me):
     juke_x = ship.x + x_amt
     juke_y = ship.y + y_amt
 
-    overshoot_x = juke_x - max(1, min(map_width-1, juke_x))
-    overshoot_y = juke_y - max(1, min(map_height-1, juke_y))
+    overshoot_x = juke_x - max(0, min(map_width, juke_x))
+    overshoot_y = juke_y - max(0, min(map_height, juke_y))
 
     # overshooting both x and y (near corner)
     if abs(overshoot_x) > 0 and abs(overshoot_y) > 0:
@@ -384,7 +381,7 @@ def register_trajectory(ship, cmd):
 
 def register_command(ship, cmd, err=None):
     if cmd:
-        command_dict[ship.id] = cmd
+        command_queue.append(cmd)
         register_trajectory(ship, cmd)
     else:
         if err:
@@ -402,9 +399,8 @@ map_height = game_map.height
 me = game_map.get_me()
 
 trajectories = {}
-command_dict = {}
+command_queue = []
 round_counter = 0
-early_game = True
 
 dogfighting = False
 if two_player:
@@ -455,7 +451,7 @@ while True:
     start_time = time.time()
     
     trajectories = {}
-    command_dict = {}
+    command_queue = []
 
     # ship and planet lists
     friendly_ships = me.all_ships()
@@ -544,7 +540,7 @@ while True:
         closest_es_dist = closest_enemy_ships_dist(ship, me, dist=20)
         has_undocked = False
         for es_dist in closest_es_dist:
-            es_score = 1
+            es_score = es_dist[0].health
             # 1/4 the threat level of docked ships
             if es_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
                 es_score = float(es_score)/4
@@ -558,10 +554,10 @@ while True:
         threat_scores[ship.id] = threat_score
 
         # assess strength level
-        strength_score = 1
-        closest_fs_dist = closest_friendly_ships_dist(ship, me, dist=5)
+        strength_score = 0 # avoid 1 v 1
+        closest_fs_dist = closest_friendly_ships_dist(ship, me, dist=10)
         for fs_dist in closest_fs_dist:
-            fs_score = 1
+            fs_score = fs_dist[0].health
             # 1/4 the threat level of docked ships
             if fs_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
                 fs_score = float(fs_score)/4
@@ -579,6 +575,7 @@ while True:
 
     # -------------- Early game ----------------- #
 
+    early_game = (len(my_planets) < 1 and round_counter < 30) or dogfighting
     # get rid of early game collision
     if early_game:
         if not dogfighting:
@@ -606,9 +603,6 @@ while True:
                 err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
                 register_command(ship, cmd, err=err_msg)
 
-        # update whether or not it's still early game
-        early_game = (len(my_planets) < 1 and round_counter < 30) or dogfighting
-
 
 
     # -------------- Main game ----------------- #
@@ -627,18 +621,7 @@ while True:
                 # will overwrite last defense target if closest_free already used, should be ok
                 defense_target[closest_free.id] = invader
                 logging.info("assigning %s to defend against %s" % (closest_free.id, invader.id))
-
-        # calculate threatened ships
-        threatened_ships = []
-        for i in range(len(free_ships)):
-            ship = free_ships[i]
-            threat_score = threat_scores[ship.id]
-            strength_score = strength_scores[ship.id]
-            if threat_score > strength_score:
-                logging.info("threat level too high, %s will attempt to flock" % ship.id)
-                threatened_ships.append(ship)
-                # remove from free ships
-                free_ships[i] = None
+        logging.info("Time used after defense check: %s" % (time.time() - start_time))
 
         # check if we should run away in 4-player games
         runaway = False
@@ -656,7 +639,7 @@ while True:
                 ship = docked_ships[i]
                 cmd = ship.undock()
                 register_command(ship, cmd)
-            docked_ships = []
+            docked_ships = {}
             for i in range(len(free_ships)):
                 if time.time() >= start_time + 1.4:
                     logging.info("1.4 s exceeded")
@@ -666,25 +649,50 @@ while True:
                 fs = closest_friendly_ships_dist(ship, me, dist=3)
                 cmd = corner_city(ship, cmd) if len(efs) == 0 or len(fs) > 0 else juke_city(ship, cmd)
                 register_command(ship, cmd)
-            free_ships = []
+            free_ships = {}
 
 
 
-        # main loop across free_ships (non threatened)
+        # main loop across free_ships
         for i in range(len(free_ships)):
             if time.time() >= start_time + 1.4:
                 logging.info("1.4 s exceeded")
                 break
             
             ship = free_ships[i]
-            if ship == None:
-                continue
 
             # 1. check if docked ships need defense
             if ship.id in defense_target:
                 cmd = attack_ship(ship, defense_target[ship.id])
                 err_msg = "ship %s couldn't move to attack invader %s" % (ship.id, defense_target[ship.id].id)
                 register_command(ship, cmd, err=err_msg)
+                continue
+
+            # check if we need to back off and swarm
+            threat_score = threat_scores[ship.id]
+            strength_score = strength_scores[ship.id]
+            if threat_score > strength_score:
+                logging.info("threat level too high, attempt to flock")
+                cf_dists = closest_friendlies[ship.id]
+                # want to choose the closest friendly that has strength > threat
+                swarm_ship = None
+                for cf_tup in cf_dists:
+                    cf_ship = cf_tup[0]
+                    cf_strength = strength_scores[cf_ship.id]
+                    cf_threat = threat_scores[cf_ship.id]
+                    if cf_strength > cf_threat:
+                        swarm_ship = cf_ship
+                        break
+                # go towards closest friendly with strength > threat (range capped at 40)
+                if swarm_ship:
+                    cmd = flock(ship, swarm_ship)
+                    err_msg = "ship %s couldn't move towards ship %s" % (ship.id, swarm_ship.id)
+                    register_command(ship, cmd, err=err_msg)
+                # otherwise juke city
+                else:
+                    cmd = juke_city(ship, me)
+                    register_command(ship, cmd, err=err_msg)
+                    logging.info("JUKE CITY")
                 continue
 
             # 2. if there's an enemy near, go ham
@@ -785,36 +793,6 @@ while True:
             else:
                 logging.info("weird... couln't find closest_es when no enemy planets")
 
-        # flock threatened_ships to closest swarm_ship's trajectory
-        for ship in threatened_ships:
-            if time.time() >= start_time + 1.4:
-                logging.info("1.4 s exceeded")
-                break
-            cf_dists = closest_friendlies[ship.id]
-            # want to choose the closest friendly that has strength > threat
-            swarm_ship = None
-            for cf_tup in cf_dists:
-                cf_ship = cf_tup[0]
-                cf_strength = strength_scores[cf_ship.id]
-                cf_threat = threat_scores[cf_ship.id]
-                if cf_strength > cf_threat:
-                    swarm_ship = cf_ship
-                    break
-            # go towards closest friendly with strength > threat (range capped at 40)
-            if swarm_ship:
-                cmd = flock_trajectory(ship, swarm_ship)
-                err_msg = "ship %s couldn't move towards ship %s" % (ship.id, swarm_ship.id)
-                register_command(ship, cmd, err=err_msg)
-            # otherwise juke city
-            else:
-                cmd = juke_city(ship, me)
-                register_command(ship, cmd, err=err_msg)
-                logging.info("JUKE CITY")
-
-
-    command_queue = []
-    for sid in command_dict:
-        command_queue.append(command_dict[sid])
     game.send_command_queue(command_queue)
     """
     logging.info("Trajectories")
