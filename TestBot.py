@@ -7,39 +7,35 @@ game = hlt.Game("ezboi")
 logging.info("Starting my dope bot!")
 
 def closest_dockable_planet(ship, me):
-    entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in sorted(entities_by_distance):
-        for entity in entities_by_distance[distance]:
-            if isinstance(entity, hlt.entity.Planet) and not entity.is_full() and (not entity.is_owned() or entity.owner == me):
-                return entity
-    return None
+    cd_list = closest_dockable_planet_list(ship, me)
+    return cd_list[0]
 
 def closest_dockable_planet_list(ship, me):
-    nearest_planet_list = []
+    planet_dist_tuples = []
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in sorted(entities_by_distance):
+    for distance in entities_by_distance:
         for entity in entities_by_distance[distance]:
             if isinstance(entity, hlt.entity.Planet) and not entity.is_full() and (not entity.is_owned() or entity.owner == me):
-                nearest_planet_list.append(entity)
+                planet_dist_tuples.append((entity, distance-entity.radius))
+    planet_dist_tuples.sort(key = lambda tup: tup[1])
+    nearest_planet_list = [tup[0] for tup in planet_dist_tuples]
     return nearest_planet_list
 
 def closest_dockable_center_planet_list(ship, me):
-    nearest_planet_list = []
-    entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in sorted(entities_by_distance):
-        for entity in entities_by_distance[distance]:
-            if isinstance(entity, hlt.entity.Planet) and not entity.is_full() and (not entity.is_owned() or entity.owner == me):
-                if entity.id < 4:
-                    nearest_planet_list.append(entity)
-    return nearest_planet_list
+    cd_list = closest_dockable_planet_list(ship, me)
+    cd_center_list = [cd for cd in cd_list if cd.id < 4]
+    return ce_center_list
 
 def closest_enemy_planet(ship, me):
+    planet_dist_tuples = []
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in sorted(entities_by_distance):
+    for distance in entities_by_distance:
         for entity in entities_by_distance[distance]:
             if isinstance(entity, hlt.entity.Planet) and entity.is_owned() and entity.owner != me:
-                return entity
-    return None
+                planet_dist_tuples.append((entity, distance-entity.radius))
+    planet_dist_tuples.sort(key = lambda tup: tup[1])
+    nearest_planet_list = [tup[0] for tup in planet_dist_tuples]
+    return nearest_planet_list[0] if len(nearest_planet_list) > 0 else None
 
 def closest_enemy_ship(ship, me):
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
@@ -583,6 +579,10 @@ while True:
                 fs_score = float(fs_score)/4
             strength_score  += fs_score
         logging.info("%s has strength score: %s" % (ship.id, strength_score))
+        """
+        if strength_score > 10:
+            strength_score = strength_score*1.5
+        """
         strength_scores[ship.id] = strength_score
 
         # save closest friendlies
@@ -595,7 +595,7 @@ while True:
 
     # -------------- Early game ----------------- #
 
-    # reevaluate dogfighting if it's on
+    # reevaluate dogfighting if it's on (to turn off)
     if dogfighting:
         dogfighting = False
         for ship in free_ships:
@@ -706,8 +706,8 @@ while True:
                 register_command(ship, cmd)
             docked_ships = []
             for i in range(len(free_ships)):
-                if time.time() >= start_time + 1.4:
-                    logging.info("1.4 s exceeded")
+                if time.time() >= start_time + 1.5:
+                    logging.info("1.5 s exceeded")
                     break
                 ship = free_ships[i]
                 efs = closest_enemy_free_ships_dist(ship, me, dist=20)
@@ -730,8 +730,8 @@ while True:
 
         # main loop across free_ships (non threatened)
         for i in range(len(free_ships)):
-            if time.time() >= start_time + 1.4:
-                logging.info("1.4 s exceeded")
+            if time.time() >= start_time + 1.5:
+                logging.info("1.5 s exceeded")
                 break
             
             ship = free_ships[i]
@@ -845,8 +845,8 @@ while True:
 
         # flock threatened_ships to closest swarm_ship's trajectory
         for ship in threatened_ships:
-            if time.time() >= start_time + 1.4:
-                logging.info("1.4 s exceeded")
+            if time.time() >= start_time + 1.5:
+                logging.info("1.5 s exceeded")
                 break
             cf_dists = closest_friendlies[ship.id]
             # want to choose the closest friendly that has strength > threat
