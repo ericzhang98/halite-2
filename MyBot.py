@@ -24,7 +24,7 @@ def closest_dockable_planet_list(ship, me):
 def closest_dockable_center_planet_list(ship, me):
     cd_list = closest_dockable_planet_list(ship, me)
     cd_center_list = [cd for cd in cd_list if cd.id < 4]
-    return ce_center_list
+    return cd_center_list
 
 def closest_enemy_planet(ship, me):
     planet_dist_tuples = []
@@ -598,6 +598,7 @@ while True:
     # reevaluate dogfighting if it's on (to turn off)
     if dogfighting:
         dogfighting = False
+        rushing = False
         for ship in free_ships:
             closest_es = closest_enemy_ship(ship, me)
             if ship.calculate_distance_between(closest_es) < 50:
