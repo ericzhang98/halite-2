@@ -508,6 +508,7 @@ while True:
     total_x = 0
     total_y = 0
     num_docked = 0
+    """
     for p in my_planets:
         p_num = len(p.all_docked_ships())
         p_location = (p.x, p.y)
@@ -517,6 +518,14 @@ while True:
     if num_docked > 0:
         pc.x = total_x/num_docked
         pc.y = total_y/num_docked
+    """
+    # find ship center
+    for fs in friendly_ships:
+        total_x += fs.x
+        total_y += fs.y
+    pc.x = total_x/len(friendly_ships)
+    pc.y = total_y/len(friendly_ships)
+
     #logging.info("Planet center: %s, %s" % (pc.x, pc.y))
 
     # build priority level for attacking enemy planets based on planet center
@@ -579,10 +588,8 @@ while True:
                 fs_score = float(fs_score)/4
             strength_score  += fs_score
         logging.info("%s has strength score: %s" % (ship.id, strength_score))
-        """
         if strength_score > 10:
             strength_score = strength_score*1.5
-        """
         strength_scores[ship.id] = strength_score
 
         # save closest friendlies
@@ -601,9 +608,9 @@ while True:
         rushing = False
         for ship in free_ships:
             closest_es = closest_enemy_ship(ship, me)
-            if ship.calculate_distance_between(closest_es) < 50:
+            if ship.calculate_distance_between(closest_es) < 70:
                 dogfighting = True
-    early_game = early_game and ((len(my_planets) < 1 and round_counter < 30) or rushing or dogfighting)
+    early_game = early_game and ((len(my_planets) < 3 and round_counter < 30) or rushing or dogfighting)
 
     if early_game:
         logging.info("EARLY GAME with rushing: %s and dogfighting: %s" % (rushing, dogfighting))
@@ -640,7 +647,7 @@ while True:
                     if ship.can_dock(cd):
                         # check if closest es is within 50, turn on dogfighting if True (dogfighting case will evaluate and overwrite commands)
                         closest_es = closest_enemy_ship(ship, me)
-                        if ship.calculate_distance_between(closest_es) < 50:
+                        if ship.calculate_distance_between(closest_es) < 70:
                             dogfighting = True
                         cmd = ship.dock(cd)
                         register_command(ship, cmd)
@@ -656,6 +663,10 @@ while True:
                     cmd = attack_ship(ship, closest_es)
                     err_msg = "%s failed to fight es %s" % (ship.id, closest_es.id)
                     register_command(ship, cmd, err=err_msg)
+                for ship in docked_ships:
+                    cmd = ship.undock()
+                    register_command(ship, cmd)
+
         else:
             for ship in free_ships:
                 # in order of closeness for dockable planets
