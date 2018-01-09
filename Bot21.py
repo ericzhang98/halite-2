@@ -136,7 +136,7 @@ def trajectories_intersect(line1, line2):
         tx_2 = startx_2 + t_factor*dx_2
         ty_2 = starty_2 + t_factor*dy_2
         # could change distance setting for high_accuracy as well (to like 1.1)
-        if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.01:
+        if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.001:
             return True
     return False
 
@@ -165,7 +165,7 @@ def trajectories_intersect_t(line1, trajectories):
             tx_1 = discrete_line1[t][0]
             ty_1 = discrete_line1[t][1]
             # could change distance setting for high_accuracy as well (to like 1.1)
-            if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.01:
+            if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.001:
                 return True
     return False
 
@@ -194,7 +194,7 @@ def trajectories_intersect_l(line1, trajectories):
             tx_1 = discrete_line1[t][0]
             ty_1 = discrete_line1[t][1]
             # could change distance setting for high_accuracy as well (to like 1.1)
-            if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.01:
+            if (tx_2-tx_1)**2 + (ty_2-ty_1)**2 <= 1.001:
                 return True
     return False
 
@@ -711,7 +711,7 @@ while True:
             # follow closest friendly if it has a movement action when near enemy
             closest_es = closest_enemy_ship(ship, me)
             if ship.calculate_distance_between(closest_es) < 30:
-                followable_friendlies = closest_friendly_ships_dist(ship, me, dist=3, sort=True)
+                followable_friendlies = closest_friendly_ships_dist(ship, me, dist=4, sort=True)
                 will_follow = False
                 for ff_tup in followable_friendlies:
                     ff = ff_tup[0]
@@ -729,21 +729,6 @@ while True:
                             break
                 if will_follow:
                     continue
-
-            """
-            # attack a close ship if we're within 50 of a planet
-            go_ham = False
-            for p in all_planets:
-                if ship.calculate_distance_between(p) < 50:
-                    go_ham = True
-                    break
-            if go_ham:
-                closest_es = closest_enemy_ship(ship, me)
-                if ship.calculate_distance_between(closest_es) < 10:
-                    cmd = attack_ship(ship, closest_es)
-                    register_command(ship, cmd)
-                    continue
-            """
 
             # 1. check if docked ships need defense
             if ship.id in defense_target:
@@ -829,8 +814,7 @@ while True:
                     target_planet = ep_attack_2
                     dist = ship.calculate_distance_between(target_planet)
                     threshold = attack_threshold[target_planet]
-                    #if dist <= threshold:
-                    if True:
+                    if dist <= threshold:
                         cmd = attack_docked_planet(ship, target_planet)
                         err_msg = "ship %s couldn't move to attack planet %s" % (ship.id, target_planet.id)
                         register_command(ship, cmd, err=err_msg)
