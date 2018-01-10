@@ -628,6 +628,43 @@ while True:
                             register_command(ship, cmd)
                         break
         if two_player and dogfighting:
+            """
+            # check if we need to group up
+            group_up = False
+            if len(enemy_ships) >= 3:
+                for s1 in free_ships:
+                    for s2 in free_ships:
+                        if s1.calculate_distance_between(s2) > 2:
+                            group_up = True
+            if group_up:
+                # find es center
+                es_x = 0
+                es_y = 0
+                for es in enemy_ships:
+                    es_x += es.x
+                    es_y += es.y
+                es_x = es_x/len(enemy_ships)
+                es_y = es_y/len(enemy_ships)
+                es_pos = hlt.entity.Position(es_x, es_y)
+                # find furthest friendly
+                ff = None
+                ff_dist = 0
+                for ship in free_ships:
+                    dist = ship.calculate_distance_between(es_pos)
+                    dist > ff_dist:
+                        ff = ship
+                        ff_dist = dist
+                # attack with the furthest friendly
+                closest_es = closest_enemy_ship(ff, me)
+                cmd = attack_ship(ff, closest_es)
+                register_command(ff, cmd)
+                # other ships need to flock to the furthest friendly
+                for ship in free_ships:
+                    if ship != ff:
+                        cmd = flock_trajectory(ship, ff)
+                        register_command(ship, cmd)
+            else:
+            """
             for ship in free_ships:
                 closest_es = closest_enemy_ship(ship, me)
                 logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
@@ -730,7 +767,6 @@ while True:
                 if will_follow:
                     continue
 
-            """
             # attack a close ship if we're within 50 of a planet
             go_ham = False
             for p in all_planets:
@@ -743,7 +779,6 @@ while True:
                     cmd = attack_ship(ship, closest_es)
                     register_command(ship, cmd)
                     continue
-            """
 
             # 1. check if docked ships need defense
             if ship.id in defense_target:

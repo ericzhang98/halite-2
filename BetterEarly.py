@@ -628,7 +628,6 @@ while True:
                             register_command(ship, cmd)
                         break
         if two_player and dogfighting:
-            """
             # check if we need to group up
             group_up = False
             if len(enemy_ships) >= 3:
@@ -664,13 +663,12 @@ while True:
                         cmd = flock_trajectory(ship, ff)
                         register_command(ship, cmd)
             else:
-            """
-            for ship in free_ships:
-                closest_es = closest_enemy_ship(ship, me)
-                logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
-                cmd = attack_ship(ship, closest_es)
-                err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
-                register_command(ship, cmd, err=err_msg)
+                for ship in free_ships:
+                    closest_es = closest_enemy_ship(ship, me)
+                    logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
+                    cmd = attack_ship(ship, closest_es)
+                    err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
+                    register_command(ship, cmd, err=err_msg)
 
         # update whether or not it's still early game
         early_game = (len(my_planets) < 1 and round_counter < 30) or dogfighting
@@ -767,6 +765,7 @@ while True:
                 if will_follow:
                     continue
 
+            """
             # attack a close ship if we're within 50 of a planet
             go_ham = False
             for p in all_planets:
@@ -779,6 +778,7 @@ while True:
                     cmd = attack_ship(ship, closest_es)
                     register_command(ship, cmd)
                     continue
+            """
 
             # 1. check if docked ships need defense
             if ship.id in defense_target:
