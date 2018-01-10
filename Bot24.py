@@ -6,9 +6,6 @@ import math
 game = hlt.Game("ezboi")
 logging.info("Starting my dope bot!")
 
-
-# -------------- Closest Planets ----------------- #
-
 def closest_dockable_planet(ship, me):
     cd_list = closest_dockable_planet_list(ship, me)
     return cd_list[0]
@@ -40,9 +37,6 @@ def closest_enemy_planet(ship, me):
     nearest_planet_list = [tup[0] for tup in planet_dist_tuples]
     return nearest_planet_list[0] if len(nearest_planet_list) > 0 else None
 
-
-# -------------- Closest Ships ----------------- #
-
 def closest_enemy_ship(ship, me):
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
     for distance in sorted(entities_by_distance):
@@ -51,20 +45,10 @@ def closest_enemy_ship(ship, me):
                 return entity
     return None
 
-def closest_enemy_free_ship(ship, me):
-    entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in sorted(entities_by_distance):
-        for entity in entities_by_distance[distance]:
-            if isinstance(entity, hlt.entity.Ship) and entity.owner != me and entity.docking_status == hlt.entity.Ship.DockingStatus.UNDOCKED:
-                return entity
-    return None
-
-
-
 def closest_enemy_ships_dist(ship, me, dist=100, sort=False):
     enemy_ships_dist = []
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in entities_by_distance:
+    for distance in sorted(entities_by_distance):
         if distance < dist:
             for entity in entities_by_distance[distance]:
                 if isinstance(entity, hlt.entity.Ship) and entity.owner != me:
@@ -73,25 +57,21 @@ def closest_enemy_ships_dist(ship, me, dist=100, sort=False):
         enemy_ships_dist.sort(key = lambda tup: tup[1])
     return enemy_ships_dist
 
+def closest_enemy_free_ship(ship, me):
+    entities_by_distance = game_map.nearby_entities_by_distance(ship)
+    for distance in sorted(entities_by_distance):
+        for entity in entities_by_distance[distance]:
+            if isinstance(entity, hlt.entity.Ship) and entity.owner != me and entity.docking_status == ship.DockingStatus.UNDOCKED:
+                return entity
+    return None
+
 def closest_enemy_free_ships_dist(ship, me, dist=100, sort=False):
     enemy_ships_dist = []
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in entities_by_distance:
+    for distance in sorted(entities_by_distance):
         if distance < dist:
             for entity in entities_by_distance[distance]:
-                if isinstance(entity, hlt.entity.Ship) and entity.owner != me and entity.docking_status == hlt.entity.Ship.DockingStatus.UNDOCKED:
-                    enemy_ships_dist.append((entity, distance))
-    if sort:
-        enemy_ships_dist.sort(key = lambda tup: tup[1])
-    return enemy_ships_dist
-
-def closest_enemy_docked_ships_dist(ship, me, dist=100, sort=False):
-    enemy_ships_dist = []
-    entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in entities_by_distance:
-        if distance < dist:
-            for entity in entities_by_distance[distance]:
-                if isinstance(entity, hlt.entity.Ship) and entity.owner != me and entity.docking_status != hlt.entity.Ship.DockingStatus.UNDOCKED:
+                if isinstance(entity, hlt.entity.Ship) and entity.owner != me and entity.docking_status == ship.DockingStatus.UNDOCKED:
                     enemy_ships_dist.append((entity, distance))
     if sort:
         enemy_ships_dist.sort(key = lambda tup: tup[1])
@@ -100,7 +80,7 @@ def closest_enemy_docked_ships_dist(ship, me, dist=100, sort=False):
 def closest_friendly_ships_dist(ship, me, dist=100, sort=False):
     friendly_ships_dist = []
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in entities_by_distance:
+    for distance in sorted(entities_by_distance):
         if distance < dist:
             for entity in entities_by_distance[distance]:
                 if isinstance(entity, hlt.entity.Ship) and entity.owner == me:
@@ -109,44 +89,25 @@ def closest_friendly_ships_dist(ship, me, dist=100, sort=False):
         friendly_ships_dist.sort(key = lambda tup: tup[1])
     return friendly_ships_dist
 
-def closest_free_ships_dist(ship, me, dist=100, sort=False):
-    free_ships_dist = []
+def closest_free_ship(ship, me):
     entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in entities_by_distance:
-        if distance < dist:
-            for entity in entities_by_distance[distance]:
-                if isinstance(entity, hlt.entity.Ship) and entity.owner == me and entity.docking_status == hlt.entity.Ship.DockingStatus.UNDOCKED:
-                    free_ships_dist.append((entity, distance))
-    if sort:
-        free_ships_dist.sort(key = lambda tup: tup[1])
-    return free_ships_dist
+    for distance in sorted(entities_by_distance):
+        for entity in entities_by_distance[distance]:
+            if isinstance(entity, hlt.entity.Ship) and entity.owner == me and entity.docking_status == ship.DockingStatus.UNDOCKED:
+                return entity
+    return None
 
-def closest_docked_ships_dist(ship, me, dist=100, sort=False):
-    free_ships_dist = []
-    entities_by_distance = game_map.nearby_entities_by_distance(ship)
-    for distance in entities_by_distance:
-        if distance < dist:
-            for entity in entities_by_distance[distance]:
-                if isinstance(entity, hlt.entity.Ship) and entity.owner == me and entity.docking_status != hlt.entity.Ship.DockingStatus.UNDOCKED:
-                    free_ships_dist.append((entity, distance))
-    if sort:
-        free_ships_dist.sort(key = lambda tup: tup[1])
-    return free_ships_dist
+def collide_entity(ship, entity):
+    navigate_command = ship.navigate(ship.closest_point_to(entity,
+        min_distance=-entity.radius), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+    if ship.calculate_distance_between(entity) < entity.radius + 7:
+        navigate_command = ship.navigate(ship.closest_point_to(entity,
+            min_distance=-entity.radius), game_map, speed=int(hlt.constants.MAX_SPEED),
+            ignore_planets = True, angular_step=1)
+    return navigate_command
 
 
 # -------------- Geometry ----------------- #
-
-def avg_pos(entities):
-    if len(entities) == 0:
-        return hlt.entity.Position(map_width/2, map_height/2)
-    e_x = 0
-    e_y = 0
-    for e in entities:
-        e_x += e.x
-        e_y += e.y
-    e_x = e_x/len(entities)
-    e_y = e_y/len(entities)
-    return hlt.entity.Position(e_x, e_y)
 
 # returns list of ships within dist and planet with surfaces within dist, extra fudge of 0.6
 def entities_within_distance(ship, dist):
@@ -315,15 +276,6 @@ def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_correctio
 
 # -------------- Actions ----------------- #
 
-def collide_entity(ship, entity):
-    navigate_command = ship.navigate(ship.closest_point_to(entity,
-        min_distance=-entity.radius), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-    if ship.calculate_distance_between(entity) < entity.radius + 7:
-        navigate_command = ship.navigate(ship.closest_point_to(entity,
-            min_distance=-entity.radius), game_map, speed=int(hlt.constants.MAX_SPEED),
-            ignore_planets = True, angular_step=1)
-    return navigate_command
-
 def attack_docked_planet(ship, planet, nav=2):
     docked_ships = planet.all_docked_ships()
     target_ship = None
@@ -473,7 +425,6 @@ command_dict = {}
 round_counter = 0
 early_game = True
 err_msg = "no crash plz"
-winning = False
 
 dogfighting = False
 if two_player:
@@ -510,6 +461,7 @@ if two_player:
     if fs_es_dist <= 120 and not same_planet:
         dogfighting = True
     
+
 while True:
 
 
@@ -609,7 +561,6 @@ while True:
         if len(ship_dists) > 0:
             attack_threshold[ep_attack_2] = ship_dists[int(len(ship_dists)/2)][1]
 
-    logging.info("Time used during first setup: %s" % (time.time() - start_time))
 
     threat_scores = {}
     strength_scores = {}
@@ -729,6 +680,20 @@ while True:
     # -------------- Main game ----------------- #
 
     else:
+        # calculate list of invaders
+        invaders = set()
+        defense_target = {}
+        for ds in docked_ships:
+            closest_invader = closest_enemy_free_ship(ds, me)
+            if closest_invader and ds.calculate_distance_between(closest_invader) < 40:
+                invaders.add(closest_invader)
+        for invader in invaders:
+            closest_free = closest_free_ship(invader, me)
+            if closest_free and invader.calculate_distance_between(closest_free) < 40:
+                # will overwrite last defense target if closest_free already used, should be ok
+                defense_target[closest_free.id] = invader
+                logging.info("assigning %s to defend against %s" % (closest_free.id, invader.id))
+
         # check if we should run away in 4-player games
         runaway = False
         if not two_player:
@@ -757,22 +722,6 @@ while True:
                 register_command(ship, cmd)
             free_ships = []
 
-        # calculate list of invaders and ships to defend against invaders
-        invaders = set()
-        defense_target = {}
-        for p in my_planets:
-            p_docked_ships = p.all_docked_ships()
-            ds_pos = avg_pos(p_docked_ships)
-            safe_zone = 30 + p.radius
-            invaders = [inv[0] for inv in closest_enemy_free_ships_dist(ds_pos, me, dist=safe_zone, sort=True)]
-            num_invaders = len(invaders)
-            if num_invaders > 0:
-                closest_free_ships = [cfs[0] for cfs in closest_free_ships_dist(ds_pos, me, dist=safe_zone, sort=True)]
-                closest_free_ships = closest_free_ships[0:num_invaders+1]
-                for cfs in closest_free_ships:
-                    defense_target[cfs.id] = invaders[0]
-                    # make defender stronger
-                    strength_scores[cfs.id] += 2
 
         # calculate threatened ships
         threatened_ships = []
