@@ -475,9 +475,7 @@ early_game = True
 err_msg = "no crash plz"
 winning = False
 
-rushing = False
 dogfighting = False
-
 if two_player:
     enemy_player = [p for p in game_map.all_players() if p != me][0]
     enemy_ships = [ship for ship in game_map._all_ships() if ship.owner != me]
@@ -510,7 +508,7 @@ if two_player:
     same_planet = (cd_es[0].id == cd_es[1].id) and (cd_es[1].id == cd_es[2].id) and (cd_es[0].num_docking_spots >= 3)
 
     if fs_es_dist <= 120 and not same_planet:
-        rushing = True
+        dogfighting = True
     
 while True:
 
@@ -659,132 +657,81 @@ while True:
 
     # -------------- Early game ----------------- #
 
-    # reevaluate dogfighting if it's on (to turn off)
-    if dogfighting:
-        dogfighting = False
-        rushing = False
-        for ship in free_ships:
-            closest_es = closest_enemy_ship(ship, me)
-            if ship.calculate_distance_between(closest_es) < 70:
-                dogfighting = True
-    early_game = early_game and ((len(my_planets) < 3 and round_counter < 20) or rushing or dogfighting)
-
+    # get rid of early game collision
     if early_game:
-        logging.info("EARLY GAME with rushing: %s and dogfighting: %s" % (rushing, dogfighting))
-        if two_player or not two_player:
-            if not (rushing or dogfighting):
-                target_planets = {}
-                # set initial target_planets to closest dockable w/o over-docking
-                for ship in free_ships:
-                    cd_list = closest_dockable_planet_list(ship, me)
-                    for cd in cd_list:
-                        dist = ship.calculate_distance_between(cd)
-                        # only send dockable number of ships
-                        if dist <= planet_threshold[cd]:
-                            target_planets[ship.id] = cd
-                            break
-
-                # send other ships to center planets if any ships going to center
-                if two_player:
-                    for sid in target_planets:
-                        if target_planets[sid].id < 4:
-                            # reassign ships to center planets
-                            for ship in free_ships:
-                                cd_list = closest_dockable_center_planet_list(ship, me)
-                                for cd in cd_list:
-                                    dist = ship.calculate_distance_between(cd)
-                                    # only send dockable number of ships
-                                    if dist <= planet_threshold[cd]:
-                                        target_planets[ship.id] = cd
-                                        break
-
-                # approach and dock target planets
-                for ship in free_ships:
-                    cd = target_planets[ship.id]
-                    # dock if we can
-                    if ship.can_dock(cd):
-                        # check if closest es is within 50, turn on dogfighting if True (dogfighting case will evaluate and overwrite commands)
-                        closest_es = closest_enemy_ship(ship, me)
-                        if ship.calculate_distance_between(closest_es) < 70:
-                            dogfighting = True
-                        cmd = ship.dock(cd)
-                        register_command(ship, cmd)
-                        logging.info("%s docking" % ship.id)
-                    else:
-                        cmd = approach_planet(ship, cd)
-                        register_command(ship, cmd)
-
-            if rushing or dogfighting:
-                for ship in docked_ships:
-                    cmd = ship.undock()
-                    register_command(ship, cmd)
-                # check if we need to group up
-                group_up = False
-                if len(enemy_ships) >= 3:
-                    for s1 in free_ships:
-                        for s2 in free_ships:
-                            if s1.calculate_distance_between(s2) > 2:
-                                group_up = True
-                if group_up:
-                    # find es center
-                    es_pos = avg_pos(enemy_ships)
-                    # find furthest friendly
-                    ff = None
-                    ff_dist = 0
-                    for ship in free_ships:
-                        dist = ship.calculate_distance_between(es_pos)
-                        if dist > ff_dist:
-                            ff = ship
-                            ff_dist = dist
-                    # attack with the furthest friendly
-                    closest_es = closest_enemy_ship(ff, me)
-                    cmd = attack_ship(ff, closest_es)
-                    register_command(ff, cmd)
-                    # other ships need to flock to the furthest friendly
-                    for ship in free_ships:
-                        if ship != ff:
-                            cmd = flock_trajectory(ship, ff)
-                            register_command(ship, cmd)
-                else:
-                    for ship in free_ships:
-                        followable_friendlies = closest_friendly_ships_dist(ship, me, dist=3, sort=True)
-                        will_follow = False
-                        for ff_tup in followable_friendlies:
-                            ff = ff_tup[0]
-                            logging.info("ff id %s" % ff.id)
-                            if ff.id in trajectories:
-                                tra = trajectories[ff.id]
-                                if tra[0] != tra[2] and tra[1] != tra[3]:
-                                    logging.info("%s is following %s" % (ship.id, ff.id))
-                                    dx = ship.x - ff.x
-                                    dy = ship.y - ff.y
-                                    end_pos = hlt.entity.Position(tra[2]+dx, tra[3]+dy)
-                                    cmd = smart_nav(ship, end_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-                                    register_command(ship, cmd)
-                                    will_follow = True
-                                    break
-                        if will_follow:
-                            continue
-                        closest_es = closest_enemy_ship(ship, me)
-                        #logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
-                        cmd = attack_ship(ship, closest_es)
-                        err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
-                        register_command(ship, cmd, err=err_msg)
-
-        else:
+        if not dogfighting:
             for ship in free_ships:
                 # in order of closeness for dockable planets
                 for cd in closest_dockable_planet_list(ship, me):
                     dist = ship.calculate_distance_between(cd)
+                    # only send dockable number of ships
                     if dist <= planet_threshold[cd]:
+                        # dock if we can
                         if ship.can_dock(cd):
                             cmd = ship.dock(cd)
                             register_command(ship, cmd)
                             logging.info("%s docking" % ship.id)
+                        # approach with the same angle as the closest ship
                         else:
                             cmd = approach_planet(ship, cd)
                             register_command(ship, cmd)
                         break
+        if two_player and dogfighting:
+            # check if we need to group up
+            group_up = False
+            if len(enemy_ships) >= 3:
+                for s1 in free_ships:
+                    for s2 in free_ships:
+                        if s1.calculate_distance_between(s2) > 2:
+                            group_up = True
+            if group_up:
+                # find es center
+                es_pos = avg_pos(enemy_ships)
+                # find furthest friendly
+                ff = None
+                ff_dist = 0
+                for ship in free_ships:
+                    dist = ship.calculate_distance_between(es_pos)
+                    if dist > ff_dist:
+                        ff = ship
+                        ff_dist = dist
+                # attack with the furthest friendly
+                closest_es = closest_enemy_ship(ff, me)
+                cmd = attack_ship(ff, closest_es)
+                register_command(ff, cmd)
+                # other ships need to flock to the furthest friendly
+                for ship in free_ships:
+                    if ship != ff:
+                        cmd = flock_trajectory(ship, ff)
+                        register_command(ship, cmd)
+            else:
+                for ship in free_ships:
+                    followable_friendlies = closest_friendly_ships_dist(ship, me, dist=3, sort=True)
+                    will_follow = False
+                    for ff_tup in followable_friendlies:
+                        ff = ff_tup[0]
+                        logging.info("ff id %s" % ff.id)
+                        if ff.id in trajectories:
+                            tra = trajectories[ff.id]
+                            if tra[0] != tra[2] and tra[1] != tra[3]:
+                                logging.info("%s is following %s" % (ship.id, ff.id))
+                                dx = ship.x - ff.x
+                                dy = ship.y - ff.y
+                                end_pos = hlt.entity.Position(tra[2]+dx, tra[3]+dy)
+                                cmd = smart_nav(ship, end_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+                                register_command(ship, cmd)
+                                will_follow = True
+                                break
+                    if will_follow:
+                        continue
+                    closest_es = closest_enemy_ship(ship, me)
+                    #logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
+                    cmd = attack_ship(ship, closest_es)
+                    err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
+                    register_command(ship, cmd, err=err_msg)
+
+        # update whether or not it's still early game
+        early_game = (len(my_planets) < 1 and round_counter < 30) or dogfighting
 
 
 
@@ -797,8 +744,7 @@ while True:
             if round_counter >= 80:
                 num_planets_owned = len(game_map.planets_for_player(me))
                 for p in game_map.all_players():
-                    num_enemy_planets = len(game_map.planets_for_player(p)) 
-                    if num_enemy_planets > 2*num_planets_owned and num_enemy_planets > 10:
+                    if len(game_map.planets_for_player(p)) > 2*num_planets_owned:
                         logging.info("aborting offense, juke city time")
                         runaway = True
             
