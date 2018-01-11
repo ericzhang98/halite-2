@@ -707,9 +707,10 @@ while True:
                         closest_es = closest_enemy_ship(ship, me)
                         if ship.calculate_distance_between(closest_es) < 70:
                             dogfighting = True
-                        cmd = ship.dock(cd)
-                        register_command(ship, cmd)
-                        logging.info("%s docking" % ship.id)
+                        else:
+                            cmd = ship.dock(cd)
+                            register_command(ship, cmd)
+                            logging.info("%s docking" % ship.id)
                     else:
                         cmd = approach_planet(ship, cd)
                         register_command(ship, cmd)
@@ -746,7 +747,10 @@ while True:
                             cmd = flock_trajectory(ship, ff)
                             register_command(ship, cmd)
                 else:
-                    for ship in free_ships:
+                    free_ships_dist_sort = [(s, s.calculate_distance_between(closest_enemy_ship(s, me))) for s in free_ships]
+                    free_ships_dist_sort.sort(key = lambda tup: tup[1])
+                    free_ships_dist_sort = [s[0] for s in free_ships_dist_sort]
+                    for ship in free_ships_dist_sort:
                         followable_friendlies = closest_friendly_ships_dist(ship, me, dist=3, sort=True)
                         will_follow = False
                         for ff_tup in followable_friendlies:
