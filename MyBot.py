@@ -645,8 +645,6 @@ while True:
                 fs_score = float(fs_score)/4
             strength_score  += fs_score
         #logging.info("%s has strength score: %s" % (ship.id, strength_score))
-        if len(closest_fs_dist) > 8:
-            strength_score = strength_score*2
         strength_scores[ship.id] = strength_score
 
         # save closest friendlies
@@ -746,8 +744,7 @@ while True:
             if round_counter >= 80:
                 num_planets_owned = len(game_map.planets_for_player(me))
                 for p in game_map.all_players():
-                    num_enemy_planets = len(game_map.planets_for_player(p))
-                    if  num_enemy_planets > 2*num_planets_owned and num_enemy_planets > 10:
+                    if len(game_map.planets_for_player(p)) > 2*num_planets_owned:
                         logging.info("aborting offense, juke city time")
                         runaway = True
             
