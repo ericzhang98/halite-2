@@ -275,7 +275,7 @@ def attempt_nav(ship, target, dist, angle, trajectories, max_corrections=179, an
     if target.x < 1 or target.y < 1 or target.x > map_width-1 or target.y > map_height-1:
         target.x = max(1, min(map_width-1, target.x))
         target.y = max(1, min(map_height-1, target.y))
-        #logging.info("FIXING for ship %s new target %s %s" % (ship.id, target.x, target.y))
+        logging.info("FIXING for ship %s new target %s %s" % (ship.id, target.x, target.y))
         safe_dist = math.floor(ship.calculate_distance_between(target))
         safe_angle = ship.calculate_angle_between(target)
 
@@ -299,12 +299,12 @@ def attempt_nav(ship, target, dist, angle, trajectories, max_corrections=179, an
 def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_corrections=179, angular_step=1,
     ignore_ships=False, ignore_planets=False):
     logging.info("ATTEMPTING SMART NAV FOR %s AT %s TO %s" % (ship.id, (ship.x, ship.y), (target.x, target.y)))
-    #logging.info("trajectories:")
+    logging.info("trajectories:")
     fs_trajectories = []
     close_fs = [fs for fs in entities_within_distance(ship, 15) if (isinstance(fs, hlt.entity.Ship) and fs.owner == me)]
     for fs in close_fs:
         fs_trajectories.append(trajectories[fs.id])
-        #logging.info("%s: %s" % (fs.id, str(trajectories[fs.id])))
+        logging.info("%s: %s" % (fs.id, str(trajectories[fs.id])))
     dist = ship.calculate_distance_between(target)
     angle = ship.calculate_angle_between(target)
     # cap lookahead distance at 8
@@ -632,7 +632,7 @@ while True:
         # no undocked ships means no threat, might as well try to kill a docked ship
         if not has_undocked:
             threat_score = 0
-        #logging.info("%s has threat score: %s" % (ship.id, threat_score))
+        logging.info("%s has threat score: %s" % (ship.id, threat_score))
         threat_scores[ship.id] = threat_score
 
         # assess strength level
@@ -644,7 +644,7 @@ while True:
             if fs_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
                 fs_score = float(fs_score)/4
             strength_score  += fs_score
-        #logging.info("%s has strength score: %s" % (ship.id, strength_score))
+        logging.info("%s has strength score: %s" % (ship.id, strength_score))
         strength_scores[ship.id] = strength_score
 
         # save closest friendlies
@@ -677,6 +677,7 @@ while True:
                             register_command(ship, cmd)
                         break
         if two_player and dogfighting:
+            """
             # check if we need to group up
             group_up = False
             if len(enemy_ships) >= 3:
@@ -686,13 +687,20 @@ while True:
                             group_up = True
             if group_up:
                 # find es center
-                es_pos = avg_pos(enemy_ships)
+                es_x = 0
+                es_y = 0
+                for es in enemy_ships:
+                    es_x += es.x
+                    es_y += es.y
+                es_x = es_x/len(enemy_ships)
+                es_y = es_y/len(enemy_ships)
+                es_pos = hlt.entity.Position(es_x, es_y)
                 # find furthest friendly
                 ff = None
                 ff_dist = 0
                 for ship in free_ships:
                     dist = ship.calculate_distance_between(es_pos)
-                    if dist > ff_dist:
+                    dist > ff_dist:
                         ff = ship
                         ff_dist = dist
                 # attack with the furthest friendly
@@ -705,30 +713,13 @@ while True:
                         cmd = flock_trajectory(ship, ff)
                         register_command(ship, cmd)
             else:
-                for ship in free_ships:
-                    followable_friendlies = closest_friendly_ships_dist(ship, me, dist=3, sort=True)
-                    will_follow = False
-                    for ff_tup in followable_friendlies:
-                        ff = ff_tup[0]
-                        logging.info("ff id %s" % ff.id)
-                        if ff.id in trajectories:
-                            tra = trajectories[ff.id]
-                            if tra[0] != tra[2] and tra[1] != tra[3]:
-                                logging.info("%s is following %s" % (ship.id, ff.id))
-                                dx = ship.x - ff.x
-                                dy = ship.y - ff.y
-                                end_pos = hlt.entity.Position(tra[2]+dx, tra[3]+dy)
-                                cmd = smart_nav(ship, end_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-                                register_command(ship, cmd)
-                                will_follow = True
-                                break
-                    if will_follow:
-                        continue
-                    closest_es = closest_enemy_ship(ship, me)
-                    #logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
-                    cmd = attack_ship(ship, closest_es)
-                    err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
-                    register_command(ship, cmd, err=err_msg)
+            """
+            for ship in free_ships:
+                closest_es = closest_enemy_ship(ship, me)
+                logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
+                cmd = attack_ship(ship, closest_es)
+                err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
+                register_command(ship, cmd, err=err_msg)
 
         # update whether or not it's still early game
         early_game = (len(my_planets) < 1 and round_counter < 30) or dogfighting
@@ -812,7 +803,7 @@ while True:
                 will_follow = False
                 for ff_tup in followable_friendlies:
                     ff = ff_tup[0]
-                    #logging.info("ff id %s" % ff.id)
+                    logging.info("ff id %s" % ff.id)
                     if ff.id in trajectories:
                         tra = trajectories[ff.id]
                         if tra[0] != tra[2] and tra[1] != tra[3]:
