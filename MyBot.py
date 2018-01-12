@@ -325,6 +325,7 @@ def smart_nav_swarm(swarm, swarm_ids, target, game_map, speed, avoid_obstacles=T
     return attempt_nav(swarm, lookahead_target, dist, angle, fs_trajectories)
 
 def generate_swarm_ship(ships):
+    logging.info([(s.x, s.y) for s in ships])
     ship_x = [s.x for s in ships]
     ship_y = [s.y for s in ships]
     min_x = min(ship_x)
@@ -333,9 +334,10 @@ def generate_swarm_ship(ships):
     max_y = max(ship_y)
     center_x = (min_x + max_x)/2
     center_y = (min_y + max_y)/2
-    radius = max((max_x-min_x)/2, (max_y-min_y)/2) + 0.5
+    radius = max((max_x-min_x)/2, (max_y-min_y)/2) + 0.6
     fake_ship = hlt.entity.Ship(None, -1, center_x, center_y, None, None, None, None, None, None, None)
     fake_ship.radius = radius
+    logging.info(fake_ship)
     return fake_ship
 
 
@@ -739,7 +741,7 @@ while True:
                     if ship.can_dock(cd):
                         # check if closest es is within 50, turn on dogfighting if True (dogfighting case will evaluate and overwrite commands)
                         closest_es = closest_enemy_ship(ship, me)
-                        if ship.calculate_distance_between(closest_es) < 70:
+                        if ship.calculate_distance_between(closest_es) < 70 and len(docked_ships) < 3:
                             dogfighting = True
                         else:
                             cmd = ship.dock(cd)
@@ -791,9 +793,8 @@ while True:
                         fighting_swarm = generate_swarm_ship(free_ships)
                         swarm_ids = [s.id for s in free_ships]
                         closest_es = closest_enemy_ship(fighting_swarm, me)
-                        logging.info(fighting_swarm)
-                        logging.info(closest_es)
-                        swarm_cmd = smart_nav_swarm(fighting_swarm, swarm_ids, closest_es, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+                        target_pos = fighting_swarm.closest_point_to(closest_es, min_distance=2)
+                        swarm_cmd = smart_nav_swarm(fighting_swarm, swarm_ids, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
                         logging.info(swarm_cmd)
                         cmd_info = thrust_info(swarm_cmd)
                         speed = cmd_info[0]
