@@ -312,6 +312,35 @@ def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_correctio
     lookahead_target = hlt.entity.Position(ship.x+dist*math.cos(math.radians(angle)), ship.y+dist*math.sin(math.radians(angle)))
     return attempt_nav(ship, lookahead_target, dist, angle, fs_trajectories)
 
+def smart_nav_swarm(swarm, swarm_ids, target, game_map, speed, avoid_obstacles=True, max_corrections=179, angular_step=1,
+    ignore_ships=False, ignore_planets=False):
+    fs_trajectories = []
+    close_fs = [fs for fs in entities_within_distance(ship, 14+swarm.radius*2) if (isinstance(fs, hlt.entity.Ship) and fs.owner == me and fs.id not in swarm_ids)]
+    for fs in close_fs:
+        fs_trajectories.append(trajectories[fs.id])
+    dist = swarm.calculate_distance_between(target)
+    angle = swarm.calculate_angle_between(target)
+    dist = min(dist, 7+swarm.radius*2)
+    logging.info(dist)
+    logging.info(angle)
+    lookahead_target = hlt.entity.Position(swarm.x+dist*math.cos(math.radians(angle)), swarm.y+dist*math.sin(math.radians(angle)))
+    logging.info(lookahead_target)
+    return attempt_nav(swarm, lookahead_target, dist, angle, fs_trajectories)
+
+def generate_swarm_ship(ships):
+    ship_x = [s.x for s in ships]
+    ship_y = [s.y for s in ships]
+    min_x = min(ship_x)
+    max_x = max(ship_x)
+    min_y = min(ship_y)
+    max_y = max(ship_y)
+    center_x = (min_x + max_x)/2
+    center_y = (min_y + max_y)/2
+    radius = max((max_x-min_x)/2, (max_y-min_y)/2)
+    fake_ship = hlt.entity.Ship(None, -1, center_x, center_y, None, None, None, None, None, None, None)
+    fake_ship.radius = radius
+    return fake_ship
+
 
 # -------------- Actions ----------------- #
 
@@ -457,6 +486,14 @@ def register_command(ship, cmd, err=None):
         if err:
             logging.info(err)
 
+def thrust_info(thrust_cmd):
+    split = thrust_cmd.split()
+    logging.info(split)
+    action = split[0]
+    shipid = split[1]
+    speed = int(split[2])
+    angle = int(split[3])
+    return (speed, angle)
 
 
 
@@ -747,33 +784,31 @@ while True:
                             cmd = flock_trajectory(ship, ff)
                             register_command(ship, cmd)
                 else:
-                    free_ships_dist_sort = [(s, s.calculate_distance_between(closest_enemy_ship(s, me))) for s in free_ships]
-                    free_ships_dist_sort.sort(key = lambda tup: tup[1])
-                    free_ships_dist_sort = [s[0] for s in free_ships_dist_sort]
-                    for ship in free_ships_dist_sort:
-                        followable_friendlies = closest_friendly_ships_dist(ship, me, dist=3, sort=True)
-                        will_follow = False
-                        for ff_tup in followable_friendlies:
-                            ff = ff_tup[0]
-                            logging.info("ff id %s" % ff.id)
-                            if ff.id in trajectories:
-                                tra = trajectories[ff.id]
-                                if tra[0] != tra[2] and tra[1] != tra[3]:
-                                    logging.info("%s is following %s" % (ship.id, ff.id))
-                                    dx = ship.x - ff.x
-                                    dy = ship.y - ff.y
-                                    end_pos = hlt.entity.Position(tra[2]+dx, tra[3]+dy)
-                                    cmd = smart_nav(ship, end_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-                                    register_command(ship, cmd)
-                                    will_follow = True
-                                    break
-                        if will_follow:
-                            continue
-                        closest_es = closest_enemy_ship(ship, me)
-                        #logging.info("%s attempting to dogfight es %s" % (ship.id, closest_es.id))
-                        cmd = attack_ship(ship, closest_es)
-                        err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
-                        register_command(ship, cmd, err=err_msg)
+                    swarm_it = True
+                    for s1 in free_ships:
+                        for s2 in free_ships:
+                            if s1.calculate_distance_between(s2) > 2:
+                                swarm_it = False 
+                    if swarm_it:
+                        fighting_swarm = generate_swarm_ship(free_ships)
+                        swarm_ids = [s.id for s in free_ships]
+                        closest_es = closest_enemy_ship(fighting_swarm, me)
+                        logging.info(fighting_swarm)
+                        logging.info(closest_es)
+                        swarm_cmd = smart_nav_swarm(fighting_swarm, swarm_ids, closest_es, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+                        logging.info(swarm_cmd)
+                        cmd_info = thrust_info(swarm_cmd)
+                        speed = cmd_info[0]
+                        angle = cmd_info[1]
+                        for ship in free_ships:
+                            register_command(ship, ship.thrust(speed, angle))
+                        logging.info(command_dict)
+                    else:
+                        for ship in free_ships:
+                            closest_es = closest_enemy_ship(ship, me)
+                            cmd = attack_ship(ship, closest_es)
+                            err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
+                            register_command(ship, cmd, err=err_msg)
 
         else:
             for ship in free_ships:
