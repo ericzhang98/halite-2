@@ -378,11 +378,7 @@ def attack_ship(ship, enemy_ship, nav=2):
         dist_from_es = 1
     if ship.health < 64 and num_free_es_4 > 0:
         dist_from_es = -0.5 # go for the collision
-    p = enemy_prediction_loc[enemy_ship.id]
-    prediction_pos = hlt.entity.Position(p[0], p[1])
-    target_pos = ship.closest_point_to(prediction_pos, min_distance=dist_from_es)
-    #target_pos = ship.closest_point_to(enemy_ship, min_distance=dist_from_es)
-    navigate_command = smart_nav(ship, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+    navigate_command = smart_nav(ship, ship.closest_point_to(enemy_ship, min_distance=dist_from_es), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return navigate_command
 
 def flock(ship, closest_fs):
@@ -516,8 +512,6 @@ map_width = game_map.width
 map_height = game_map.height
 me = game_map.get_me()
 
-previous_enemy_loc = {}
-enemy_prediction_loc = {}
 trajectories = {}
 command_dict = {}
 round_counter = 0
@@ -616,6 +610,17 @@ while True:
     total_x = 0
     total_y = 0
     num_docked = 0
+    """
+    for p in my_planets:
+        p_num = len(p.all_docked_ships())
+        p_location = (p.x, p.y)
+        num_docked += p_num
+        total_x += p_num*p_location[0]
+        total_y += p_num*p_location[1]
+    if num_docked > 0:
+        pc.x = total_x/num_docked
+        pc.y = total_y/num_docked
+    """
     # find ship center
     for fs in friendly_ships:
         total_x += fs.x
@@ -652,15 +657,6 @@ while True:
 
     logging.info("Time used during first setup: %s" % (time.time() - start_time))
 
-    for es in enemy_ships:
-        current = (es.x, es.y)
-        previous = previous_enemy_loc[es.id] if es.id in previous_enemy_loc else current
-        dist_squared = (current[0]-previous[0])**2 + (current[1]-previous[1])**2
-        dist = math.sqrt(dist_squared)
-        angle = math.atan2(current[0]-previous[0], current[1]-previous[1])
-        enemy_prediction_loc[es.id] = (current[0]+math.cos(angle)*dist/2, current[1]+math.sin(angle)*dist/2)
-        previous_enemy_loc[es.id] = current
-
     threat_scores = {}
     strength_scores = {}
     closest_friendlies = {}
@@ -692,7 +688,6 @@ while True:
 
             # assess strength level
             strength_score = 1
-            # be a bit more cautious in 4-player games
             if not two_player:
                 strength_score = 0.75
             closest_fs_dist = closest_friendly_ships_dist(ship, me, dist=5)
