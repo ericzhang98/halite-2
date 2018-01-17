@@ -672,9 +672,9 @@ while True:
         for i in range(len(friendly_ships)):
             ship = friendly_ships[i]
             closest_efs = closest_enemy_free_ship(ship, me)
-            if closest_efs and ship.calculate_distance_between(closest_efs) < 225:
+            if closest_efs and ship.calculate_distance_between(closest_efs) < 400:
                 threat_score = 0
-                closest_es_dist = closest_enemy_ships_dist(ship, me, dist=20)
+                closest_es_dist = closest_enemy_ships_dist(ship, me, dist=10)
                 for es_dist in closest_es_dist:
                     es_score = 1
                     if es_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
@@ -712,18 +712,16 @@ while True:
             if ship.calculate_distance_between(closest_es) < 80:
                 dogfighting = True
     else:
-        if len(friendly_ships) < 5:
-            for ship in friendly_ships:
-                # check if three es are within 80
-                num_es_3 = closest_enemy_free_ships_dist(ship, me, dist=80)
-                if len(num_es_3) >= 3:
-                    dogfighting = True
-                    rushing = False
+        for ship in friendly_ships:
+            # check if three es are within 80
+            num_es_3 = closest_enemy_free_ships_dist(ship, me, dist=80)
+            if len(num_es_3) >= 3:
+                dogfighting = True
+                rushing = False
 
     early_game = early_game and ((len(my_planets) < 3 and round_counter < 20) or rushing or dogfighting)
 
     if early_game:
-        logging.info("EARLY GAME %s" % round_counter)
         if not (rushing or dogfighting):
             # make target planets
             target_planets = {}
@@ -836,7 +834,6 @@ while True:
     # -------------- Main game ----------------- #
 
     else:
-        logging.info("MAIN GAME %s" % round_counter)
         # check if we should run away in 4-player games
         runaway = False
         if not two_player:
