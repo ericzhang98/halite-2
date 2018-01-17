@@ -671,38 +671,26 @@ while True:
     else:
         for i in range(len(friendly_ships)):
             ship = friendly_ships[i]
-            # do threat/strength scores
-            # assess threat level
-            threat_score = 0
-            closest_es_dist = closest_enemy_ships_dist(ship, me, dist=20)
-            has_undocked = False
-            for es_dist in closest_es_dist:
-                es_score = 1
-                # 1/4 the threat level of docked ships
-                if es_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
-                    es_score = float(es_score)/4
-                else:
-                    has_undocked = True
-                threat_score  += es_score
-            # no undocked ships means no threat, might as well try to kill a docked ship
-            if not has_undocked:
+            closest_efs = closest_enemy_free_ship(ship, me)
+            if closest_efs and ship.calculate_distance_between(closest_efs) < 400:
                 threat_score = 0
-            #logging.info("%s has threat score: %s" % (ship.id, threat_score))
-            threat_scores[ship.id] = threat_score
+                closest_es_dist = closest_enemy_ships_dist(ship, me, dist=10)
+                for es_dist in closest_es_dist:
+                    es_score = 1
+                    if es_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
+                        es_score = float(es_score)/4
+                    threat_score  += es_score
+                threat_scores[ship.id] = threat_score
+            else:
+                threat_scores[ship.id] = 0
 
-            # assess strength level
             strength_score = 1
-            # be a bit more cautious in 4-player games
-            if not two_player:
-                strength_score = 0.75
             closest_fs_dist = closest_friendly_ships_dist(ship, me, dist=5)
             for fs_dist in closest_fs_dist:
                 fs_score = 1
-                # 1/4 the threat level of docked ships
                 if fs_dist[0].docking_status != ship.DockingStatus.UNDOCKED:
-                    fs_score = float(fs_score)/4
+                    fs_score = float(fs_score)/2
                 strength_score  += fs_score
-            #logging.info("%s has strength score: %s" % (ship.id, strength_score))
             strength_scores[ship.id] = strength_score
 
             # save closest friendlies
@@ -734,129 +722,112 @@ while True:
     early_game = early_game and ((len(my_planets) < 3 and round_counter < 20) or rushing or dogfighting)
 
     if early_game:
-        if two_player or not two_player:
-            if not (rushing or dogfighting):
-                # make target planets
-                target_planets = {}
-                # set initial target_planets to closest dockable w/o over-docking
-                for ship in free_ships:
-                    cd_list = closest_dockable_planet_list(ship, me)
-                    for cd in cd_list:
-                        dist = ship.calculate_distance_between(cd)
-                        # only send dockable number of ships
-                        if dist <= planet_threshold[cd]:
-                            target_planets[ship.id] = cd
-                            break
-
-                # send other ships to center planets if any ships going to center
-                if two_player:
-                    for sid in target_planets:
-                        if target_planets[sid].id < 4:
-                            # reassign ships to center planets
-                            for ship in free_ships:
-                                cd_list = closest_dockable_center_planet_list(ship, me)
-                                for cd in cd_list:
-                                    dist = ship.calculate_distance_between(cd)
-                                    # only send dockable number of ships
-                                    if dist <= planet_threshold[cd]:
-                                        target_planets[ship.id] = cd
-                                        break
-
-                # approach and dock target planets
-                for ship in free_ships:
-                    cd = target_planets[ship.id]
-                    # dock if we can
-                    if ship.can_dock(cd):
-                        cmd = ship.dock(cd)
-                        register_command(ship, cmd)
-                        logging.info("%s docking" % ship.id)
-                    else:
-                        cmd = approach_planet(ship, cd)
-                        register_command(ship, cmd)
-
-            else:
-                for ship in docked_ships:
-                    if ship.docking_status == hlt.entity.Ship.DockingStatus.DOCKED:
-                        cmd = ship.undock()
-                        register_command(ship, cmd)
-                # check if we need to group up (enemy ships >= 3 and own ships are too spread out)
-                group_up = False
-                if len(enemy_ships) >= 3:
-                    for s1 in free_ships:
-                        for s2 in free_ships:
-                            if s1.calculate_distance_between(s2) > 2:
-                                group_up = True
-                if group_up:
-                    # find es center
-                    es_pos = avg_pos(enemy_ships)
-                    # find furthest friendly
-                    ff = None
-                    ff_dist = 0
-                    for ship in free_ships:
-                        dist = ship.calculate_distance_between(es_pos)
-                        if dist > ff_dist:
-                            ff = ship
-                            ff_dist = dist
-                    # attack with the furthest friendly
-                    closest_es = closest_enemy_ship(ff, me)
-                    cmd = attack_ship(ff, closest_es)
-                    register_command(ff, cmd)
-                    # other ships need to flock to the furthest friendly
-                    for ship in free_ships:
-                        if ship != ff:
-                            cmd = flock_trajectory(ship, ff)
-                            register_command(ship, cmd)
-                else:
-                    # check to see if friendly ships are grouped up and need to navigate as a swarm
-                    swarm_it = True
-                    for s1 in free_ships:
-                        for s2 in free_ships:
-                            if s1.calculate_distance_between(s2) > 2:
-                                swarm_it = False 
-                    # if friendly ships are grouped up, stay grouped up and navigate as a swarm
-                    if swarm_it and len(free_ships) > 1:
-                        fighting_swarm = generate_swarm_ship(free_ships)
-                        swarm_ids = [s.id for s in free_ships]
-                        # attack closest es
-                        closest_es = closest_enemy_ship(fighting_swarm, me)
-                        # determine dist based off whether or not we're stronger
-                        dist_from_es = fighting_swarm.radius
-                        num_free_es_4 = len(closest_enemy_free_ships_dist(fighting_swarm, me, dist=4))
-                        if num_free_es_4 > closest_es.health:
-                            dist_from_es = -closest_es.radius # go for the collision
-                        target_pos = fighting_swarm.closest_point_to(closest_es, min_distance=dist_from_es)
-                        swarm_cmd = smart_nav_swarm(fighting_swarm, swarm_ids, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-                        logging.info(swarm_cmd)
-                        if swarm_cmd != None:
-                            cmd_info = thrust_info(swarm_cmd)
-                            speed = cmd_info[0]
-                            angle = cmd_info[1]
-                            for ship in free_ships:
-                                register_command(ship, ship.thrust(speed, angle))
-                        logging.info(command_dict)
-                    # otherwise if friendly ships are split up, just attack individually
-                    else:
-                        for ship in free_ships:
-                            closest_es = closest_enemy_ship(ship, me)
-                            cmd = attack_ship(ship, closest_es)
-                            err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
-                            register_command(ship, cmd, err=err_msg)
-
-        # 4 player strategy
-        else:
+        if not (rushing or dogfighting):
+            # make target planets
+            target_planets = {}
+            # set initial target_planets to closest dockable w/o over-docking
             for ship in free_ships:
-                # in order of closeness for dockable planets
-                for cd in closest_dockable_planet_list(ship, me):
+                cd_list = closest_dockable_planet_list(ship, me)
+                for cd in cd_list:
                     dist = ship.calculate_distance_between(cd)
+                    # only send dockable number of ships
                     if dist <= planet_threshold[cd]:
-                        if ship.can_dock(cd):
-                            cmd = ship.dock(cd)
-                            register_command(ship, cmd)
-                            logging.info("%s docking" % ship.id)
-                        else:
-                            cmd = approach_planet(ship, cd)
-                            register_command(ship, cmd)
+                        target_planets[ship.id] = cd
                         break
+
+            # send other ships to center planets if any ships going to center
+            if two_player:
+                for sid in target_planets:
+                    if target_planets[sid].id < 4:
+                        # reassign ships to center planets
+                        for ship in free_ships:
+                            cd_list = closest_dockable_center_planet_list(ship, me)
+                            for cd in cd_list:
+                                dist = ship.calculate_distance_between(cd)
+                                # only send dockable number of ships
+                                if dist <= planet_threshold[cd]:
+                                    target_planets[ship.id] = cd
+                                    break
+
+            # approach and dock target planets
+            for ship in free_ships:
+                cd = target_planets[ship.id]
+                # dock if we can
+                if ship.can_dock(cd):
+                    cmd = ship.dock(cd)
+                    register_command(ship, cmd)
+                    logging.info("%s docking" % ship.id)
+                else:
+                    cmd = approach_planet(ship, cd)
+                    register_command(ship, cmd)
+
+        else:
+            for ship in docked_ships:
+                if ship.docking_status == hlt.entity.Ship.DockingStatus.DOCKED:
+                    cmd = ship.undock()
+                    register_command(ship, cmd)
+            # check if we need to group up (enemy ships >= 3 and own ships are too spread out)
+            group_up = False
+            if len(enemy_ships) >= 3:
+                for s1 in free_ships:
+                    for s2 in free_ships:
+                        if s1.calculate_distance_between(s2) > 2:
+                            group_up = True
+            if group_up:
+                # find es center
+                es_pos = avg_pos(enemy_ships)
+                # find furthest friendly
+                ff = None
+                ff_dist = 0
+                for ship in free_ships:
+                    dist = ship.calculate_distance_between(es_pos)
+                    if dist > ff_dist:
+                        ff = ship
+                        ff_dist = dist
+                # attack with the furthest friendly
+                closest_es = closest_enemy_ship(ff, me)
+                cmd = attack_ship(ff, closest_es)
+                register_command(ff, cmd)
+                # other ships need to flock to the furthest friendly
+                for ship in free_ships:
+                    if ship != ff:
+                        cmd = flock_trajectory(ship, ff)
+                        register_command(ship, cmd)
+            else:
+                # check to see if friendly ships are grouped up and need to navigate as a swarm
+                swarm_it = True
+                for s1 in free_ships:
+                    for s2 in free_ships:
+                        if s1.calculate_distance_between(s2) > 2:
+                            swarm_it = False
+                # if friendly ships are grouped up, stay grouped up and navigate as a swarm
+                if swarm_it and len(free_ships) > 1:
+                    fighting_swarm = generate_swarm_ship(free_ships)
+                    swarm_ids = [s.id for s in free_ships]
+                    # attack closest es
+                    closest_es = closest_enemy_ship(fighting_swarm, me)
+                    # determine dist based off whether or not we're stronger
+                    dist_from_es = fighting_swarm.radius
+                    num_free_es_4 = len(closest_enemy_free_ships_dist(fighting_swarm, me, dist=4))
+                    if num_free_es_4 > closest_es.health:
+                        dist_from_es = -closest_es.radius # go for the collision
+                    target_pos = fighting_swarm.closest_point_to(closest_es, min_distance=dist_from_es)
+                    swarm_cmd = smart_nav_swarm(fighting_swarm, swarm_ids, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+                    logging.info(swarm_cmd)
+                    if swarm_cmd != None:
+                        cmd_info = thrust_info(swarm_cmd)
+                        speed = cmd_info[0]
+                        angle = cmd_info[1]
+                        for ship in free_ships:
+                            register_command(ship, ship.thrust(speed, angle))
+                    logging.info(command_dict)
+                # otherwise if friendly ships are split up, just attack individually
+                else:
+                    for ship in free_ships:
+                        closest_es = closest_enemy_ship(ship, me)
+                        cmd = attack_ship(ship, closest_es)
+                        err_msg = "%s failed to dogfight es %s" % (ship.id, closest_es.id)
+                        register_command(ship, cmd, err=err_msg)
 
 
 
@@ -915,7 +886,7 @@ while True:
             ship = free_ships[i]
             threat_score = threat_scores[ship.id]
             strength_score = strength_scores[ship.id]
-            if threat_score > strength_score:
+            if threat_score > strength_score or (not two_player and threat_score > 0.75*strength_score):
                 logging.info("threat level too high, %s will attempt to flock" % ship.id)
                 threatened_ships.append(ship)
                 # remove from free ships
