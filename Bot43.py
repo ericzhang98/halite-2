@@ -348,8 +348,8 @@ def generate_swarm_ship(ships):
 def attack_ship_swarm(swarm, enemy_ship):
     dist_from_es = swarm.radius
     num_free_es_4 = len(closest_enemy_free_ships_dist(swarm, me, dist=4))
-    if num_free_es_4 < ship.health:
-        dist_from_es = -ship.radius # go for the collision if we're up in numbers
+    if num_free_es_4 > ship.health:
+        dist_from_es = -ship.radius # go for the collision
     navigate_command = smart_nav(ship, ship.closest_point_to(enemy_ship, min_distance=dist_from_es), game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
     return navigate_command
 
@@ -385,16 +385,6 @@ def attack_ship(ship, enemy_ship, nav=2):
         dist_from_es = -0.5 # go for the collision
     p = enemy_prediction_loc[enemy_ship.id]
     prediction_pos = hlt.entity.Position(p[0], p[1])
-    target_pos = ship.closest_point_to(prediction_pos, min_distance=dist_from_es)
-    #target_pos = ship.closest_point_to(enemy_ship, min_distance=dist_from_es)
-    navigate_command = smart_nav(ship, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-    return navigate_command
-
-def kite_ship(ship, enemy_ship, nav=2):
-    dist_from_es = 5
-    p = enemy_prediction_loc[enemy_ship.id]
-    prediction_pos = hlt.entity.Position(p[0], p[1])
-    logging.info(prediction_pos)
     target_pos = ship.closest_point_to(prediction_pos, min_distance=dist_from_es)
     #target_pos = ship.closest_point_to(enemy_ship, min_distance=dist_from_es)
     navigate_command = smart_nav(ship, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
@@ -691,6 +681,8 @@ while True:
                 threat_scores[ship.id] = 0
 
             strength_score = 1
+            if ship.docking_status != ship.DockingStatus.UNDOCKED:
+                strength_score += 2
             closest_fs_dist = closest_friendly_ships_dist(ship, me, dist=10)
             for fs_dist in closest_fs_dist:
                 fs_score = 1
@@ -713,23 +705,20 @@ while True:
     if dogfighting:
         dogfighting = False
         rushing = False
-        for ship in friendly_ships:
+        for ship in free_ships:
             closest_es = closest_enemy_ship(ship, me)
-            if ship.calculate_distance_between(closest_es) < 90:
+            if ship.calculate_distance_between(closest_es) < 80:
                 dogfighting = True
     else:
         if len(friendly_ships) < 5:
             for ship in friendly_ships:
                 # check if three es are within 80
-                num_es_3 = closest_enemy_free_ships_dist(ship, me, dist=90)
+                num_es_3 = closest_enemy_free_ships_dist(ship, me, dist=80)
                 if len(num_es_3) >= 3:
                     dogfighting = True
                     rushing = False
 
     early_game = early_game and ((len(my_planets) < 3 and round_counter < 20) or rushing or dogfighting)
-    if early_game:
-        if not two_player and len(friendly_ships) > 3:
-            early_game = False
 
     if early_game:
         logging.info("EARLY GAME %s" % round_counter)
@@ -775,14 +764,13 @@ while True:
         else:
             for ship in docked_ships:
                 if ship.docking_status == hlt.entity.Ship.DockingStatus.DOCKED:
-                    logging.info("undocking %s" % ship.id)
                     cmd = ship.undock()
                     register_command(ship, cmd)
             # check if we need to group up
             group_up = False
             for s1 in free_ships:
                 for s2 in free_ships:
-                    if s1.calculate_distance_between(s2) > 2.5:
+                    if s1.calculate_distance_between(s2) > 2:
                         group_up = True
             if group_up:
                 group_pos = avg_pos(free_ships)
@@ -802,25 +790,21 @@ while True:
                     swarm_ids = [s.id for s in free_ships]
                     # attack closest es
                     closest_es = closest_enemy_ship(fighting_swarm, me)
-
-                    if False and closest_es.docking_status == hlt.entity.Ship.DockingStatus.UNDOCKED and ship.calculate_distance_between(closest_es) < 15:
-                        logging.info("KITING")
-                        dist_from_es = 4
+                    # determine dist based off whether or not we're stronger
+                    dist_from_es = fighting_swarm.radius
+                    num_free_es_4 = len(closest_enemy_free_ships_dist(fighting_swarm, me, dist=4))
+                    if num_free_es_4 > closest_es.health:
+                        dist_from_es = -closest_es.radius # go for the collision
+                    target_pos = fighting_swarm.closest_point_to(closest_es, min_distance=dist_from_es)
+                    swarm_cmd = smart_nav_swarm(fighting_swarm, swarm_ids, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
+                    logging.info(swarm_cmd)
+                    if swarm_cmd != None:
+                        cmd_info = thrust_info(swarm_cmd)
+                        speed = cmd_info[0]
+                        angle = cmd_info[1]
                         for ship in free_ships:
-                            cmd = attack_ship(ship, closest_es)
-                            register_command(ship, cmd)
-
-                    else:
-                        dist_from_es = fighting_swarm.radius
-                        target_pos = fighting_swarm.closest_point_to(closest_es, min_distance=dist_from_es)
-                        swarm_cmd = smart_nav_swarm(fighting_swarm, swarm_ids, target_pos, game_map, speed=int(hlt.constants.MAX_SPEED), angular_step=1)
-                        if swarm_cmd != None:
-                            cmd_info = thrust_info(swarm_cmd)
-                            speed = cmd_info[0]
-                            angle = cmd_info[1]
-                            for ship in free_ships:
-                                register_command(ship, ship.thrust(speed, angle))
-
+                            register_command(ship, ship.thrust(speed, angle))
+                    logging.info(command_dict)
                 # otherwise if friendly ships are split up, just attack individually
                 else:
                     for ship in free_ships:
