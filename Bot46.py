@@ -7,52 +7,12 @@ game = hlt.Game("ezboi")
 logging.info("Starting my dope bot!")
 
 # -------------- Cache ----------------- #
-
 def get_nearby_entities(ship):
-    if ship.id in nearby_entities_cache:
-        return nearby_entities_cache[ship]
-    else:
-        nearby_entities_cache[ship] = game_map.nearby_entities_by_distance(ship)
-        return nearby_entities_cache[ship]
-
-def get_entity_dist(ship):
     if ship.id in entities_dist_cache:
         return entities_dist_cache[ship]
     else:
-        nearby_entities = get_nearby_entities(ship)
-        entity_dist = {}
-        for distance in nearby_entities:
-            for entity in nearby_entities[distance]:
-                entity_dist[entity] = distance
-        entities_dist_cache[ship] = entity_dist
+        entities_dist_cache[ship] = game_map.nearby_entities_by_distance(ship)
         return entities_dist_cache[ship]
-
-def closest(ship, entities):
-    return closest_list(ship, entities)[0]
-
-def closest_dist(ship, entities):
-    entity_dist_tuples = []
-    entity_dist = get_entity_dist(ship)
-    for e in entities:
-        entity_dist_tuples.append(entity, (entity_dist[ship])-entity.radius)
-    entity_dist_tuples.sort(key = lambda tup: tup[1])
-    return entity_dist_tuples
-
-def closest_list(ship, entities):
-    entity_dist_tuples = closest_dist(ship, entities)
-    return [tup[0] for tup in entity_dist_tuples]
-
-# returns list of ships within dist and planet with surfaces within dist, extra fudge of 0.6
-def entities_within_distance(ship, dist):
-    entities = []
-    entities_by_distance = get_nearby_entities(ship)
-    for distance in entities_by_distance:
-        for entity in entities_by_distance[distance]:
-            if isinstance(entity, hlt.entity.Ship) and ship.calculate_distance_between(entity) < dist+0.6:
-                entities.append(entity)
-            if isinstance(entity, hlt.entity.Planet) and ship.calculate_distance_between(entity) < dist+entity.radius+0.6:
-                entities.append(entity)
-    return entities
 
 
 # -------------- Closest Planets ----------------- #
@@ -212,6 +172,18 @@ def avg_pos(entities):
     e_y = e_y/len(entities)
     return hlt.entity.Position(e_x, e_y)
 
+# returns list of ships within dist and planet with surfaces within dist, extra fudge of 0.6
+def entities_within_distance(ship, dist):
+    entities = []
+    entities_by_distance = get_nearby_entities(ship)
+    for distance in entities_by_distance:
+        for entity in entities_by_distance[distance]:
+            if isinstance(entity, hlt.entity.Ship) and ship.calculate_distance_between(entity) < dist+0.6:
+                entities.append(entity)
+            if isinstance(entity, hlt.entity.Planet) and ship.calculate_distance_between(entity) < dist+entity.radius+0.6:
+                entities.append(entity)
+    return entities
+
 def trajectories_intersect_t(line1, trajectories):
     max_t = 100 # could do high_accuracy setting and change back down to 30
     startx_1, starty_1, endx_1, endy_1 = line1[0], line1[1], line1[2], line1[3]
@@ -308,28 +280,17 @@ def attempt_nav(ship, target, dist, angle, trajectories, max_corrections=179, an
     if target.x < 1 or target.y < 1 or target.x > map_width-1 or target.y > map_height-1:
         target.x = max(1, min(map_width-1, target.x))
         target.y = max(1, min(map_height-1, target.y))
+        #logging.info("FIXING for ship %s new target %s %s" % (ship.id, target.x, target.y))
         safe_dist = math.floor(ship.calculate_distance_between(target))
         safe_angle = ship.calculate_angle_between(target)
 
-    """
-    obstacle_between = False
-    for tup in bad_angle_tuples:
-        logging.info("SAFE_ANGLE: %s", angle)
-        direct_angle = tup[0]
-        angle_range = tup[1]
-        logging.info("DIRECT ANGLE: %s ANGLE_RANGE: %s" % (direct_angle, angle_range))
-        if abs(direct_angle-safe_angle) <= (angle_range+5):
-            obstacle_between = True
-    """
-
-    #if not obstacle_between:
+    # fastest path around planets is the closest to a straight line
     if not game_map.obstacles_between(ship, target, (hlt.entity.Ship)):
-        logging.info("FINAL ANGLE: %s" % safe_angle)
+        #logging.info("attempting end point: (%s, %s)" % (target.x, target.y))
         # will only return with cmd if it doesn't hit other trajectories
         cmd = move_ship(ship, safe_dist, safe_angle, trajectories)
         if cmd:
             return cmd
-
     # if planet/trajectory blocking, recursively look for another angle
     sign = 1 if (180-max_corrections) % 2 == 1 else -1
     new_target_dangle = sign*(180-max_corrections)*angular_step
@@ -354,21 +315,6 @@ def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_correctio
     # cap lookahead distance at 8
     dist = min(dist, 8)
     lookahead_target = hlt.entity.Position(ship.x+dist*math.cos(math.radians(angle)), ship.y+dist*math.sin(math.radians(angle)))
-
-    """
-    bad_angle_tuples = []
-    close_planets = [e for e in entities_within_distance(ship, dist) if isinstance(e, hlt.entity.Planet)]
-    for cp in close_planets:
-        d = ship.calculate_distance_between(cp)
-        r = cp.radius + ship.radius + 0.3
-        bad_angle_range = math.degrees(math.asin(r/d))
-        direct_angle = ship.calculate_angle_between(cp)
-        bad_angle_tuples.append((direct_angle, bad_angle_range))
-        """
-
-    #logging.info("BAD ANGLE TUPLES: %s" % bad_angle_tuples)
-    #logging.info("OG ANGLE: %s" % angle)
-
     return attempt_nav(ship, lookahead_target, dist, angle, fs_trajectories)
 
 def smart_nav_swarm(swarm, swarm_ids, target, game_map, speed, avoid_obstacles=True, max_corrections=179, angular_step=1,
@@ -587,7 +533,6 @@ me = game_map.get_me()
 
 previous_enemy_loc = {}
 enemy_prediction_loc = {}
-nearby_entities_cache = {}
 entities_dist_cache = {}
 trajectories = {}
 command_dict = {}
@@ -645,7 +590,6 @@ while True:
     logging.info("processing game on frame %s" % (round_counter-1))
     start_time = time.time()
 
-    nearby_entities_cache = {}
     entities_dist_cache = {}
     trajectories = {}
     command_dict = {}
@@ -771,13 +715,13 @@ while True:
         rushing = False
         for ship in friendly_ships:
             closest_es = closest_enemy_ship(ship, me)
-            if ship.calculate_distance_between(closest_es) < 80:
+            if ship.calculate_distance_between(closest_es) < 70:
                 dogfighting = True
     else:
         if len(friendly_ships) < 5:
             for ship in friendly_ships:
                 # check if three es are within 80
-                num_es_3 = closest_enemy_free_ships_dist(ship, me, dist=80)
+                num_es_3 = closest_enemy_free_ships_dist(ship, me, dist=70)
                 if len(num_es_3) >= 3:
                     dogfighting = True
                     rushing = False
