@@ -124,13 +124,6 @@ def closest_enemy_free_ship(ship, me):
     return None
 
 
-def closest_docked_ship(ship, me):
-    entities_by_distance = get_nearby_entities(ship)
-    for distance in sorted(entities_by_distance):
-        for entity in entities_by_distance[distance]:
-            if isinstance(entity, hlt.entity.Ship) and entity.owner == me and entity.docking_status != hlt.entity.Ship.DockingStatus.UNDOCKED:
-                return entity
-    return None
 
 def closest_enemy_ships_dist(ship, me, dist=100, sort=False):
     enemy_ships_dist = []
@@ -963,7 +956,6 @@ while True:
         # calculate list of invaders and ships to defend against invaders
         invaders = set()
         defense_target = {}
-        defense_ds_info = {}
         for p in my_planets:
             p_docked_ships = p.all_docked_ships()
             ds_pos = avg_pos(p_docked_ships)
@@ -972,13 +964,9 @@ while True:
             num_invaders = len(invaders)
             if num_invaders > 0:
                 closest_free_ships = [cfs[0] for cfs in closest_free_ships_dist(ds_pos, me, dist=safe_zone, sort=True)]
-                closest_free_ships = closest_free_ships[0:num_invaders]
+                closest_free_ships = closest_free_ships[0:num_invaders+1]
                 for cfs in closest_free_ships:
                     defense_target[cfs.id] = invaders[0]
-                    closest_ds_from_inv = closest_docked_ship(invaders[0], me)
-                    invader_dist = closest_ds_from_inv.calculate_distance_between(invaders[0])
-                    invader_angle = closest_ds_from_inv.calculate_angle_between(invaders[0])
-                    defense_ds_info[cfs.id] = (closest_ds_from_inv, invader_dist, invader_angle)
                     # make defender stronger
                     strength_scores[cfs.id] += 3
 
@@ -1041,19 +1029,7 @@ while True:
 
             # 1. check if docked ships need defense
             if ship.id in defense_target:
-                defense_info = defense_ds_info[ship.id]
-                ds = defense_info[0]
-                invader = defense_target[ship.id]
-                invader_dist = defense_info[1]
-                invader_angle = defense_info[2]
-
-                defense_x = ds.x+math.cos(math.radians(invader_angle))*1
-                defense_y = ds.y+math.sin(math.radians(invader_angle))*1
-                defense_pos = hlt.entity.Position(defense_x, defense_y)
-                cmd = flock_pos(ship, defense_pos)
-
-                #cmd = attack_ship(ship, defense_target[ship.id])
-
+                cmd = attack_ship(ship, defense_target[ship.id])
                 err_msg = "ship %s couldn't move to attack invader %s" % (ship.id, defense_target[ship.id].id)
                 register_command(ship, cmd, err=err_msg)
                 continue
