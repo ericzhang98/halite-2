@@ -803,7 +803,7 @@ while True:
         dogfighting = False
         rushing = False
         for ship in friendly_ships:
-            closest_es = closest_enemy_free_ship(ship, me)
+            closest_es = closest_enemy_ship(ship, me)
             if ship.calculate_distance_between(closest_es) < 80:
                 dogfighting = True
     else:
@@ -854,9 +854,12 @@ while True:
                 cd = target_planets[ship.id]
                 # dock if we can
                 if ship.can_dock(cd):
-                    cmd = ship.dock(cd)
-                    register_command(ship, cmd)
-                    logging.info("%s docking" % ship.id)
+                    closest_efs = closest_enemy_free_ship(ship, me)
+                    num_es_100 = len(closest_enemy_free_ships_dist(ship, me, dist=100))
+                    if num_es_100 >= 3:
+                        cmd = ship.dock(cd)
+                        register_command(ship, cmd)
+                        logging.info("%s docking" % ship.id)
                 else:
                     cmd = approach_planet(ship, cd)
                     register_command(ship, cmd)
