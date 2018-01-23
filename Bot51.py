@@ -927,11 +927,11 @@ while True:
         # check if we should run away in 4-player games
         runaway = False
         if not two_player:
-            if round_counter >= 100:
+            if round_counter >= 80:
                 num_planets_owned = len(game_map.planets_for_player(me))
                 for p in game_map.all_players():
                     num_enemy_planets = len(game_map.planets_for_player(p)) 
-                    if num_enemy_planets > 2*num_planets_owned and num_enemy_planets > 10 and len(free_ships) < 20:
+                    if num_enemy_planets > 2*num_planets_owned and num_enemy_planets > 10:
                         logging.info("aborting offense, juke city time")
                         runaway = True
             

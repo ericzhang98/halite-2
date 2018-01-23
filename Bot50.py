@@ -320,7 +320,7 @@ def attempt_nav(ship, target, dist, angle, trajectories, bad_angle_tuples, max_c
         if angle_diff > 180:
             angle_diff = 360 - angle_diff
         logging.info("DIRECT ANGLE: %s ANGLE_RANGE: %s" % (direct_angle, angle_range))
-        if angle_diff <= (angle_range+1):
+        if angle_diff <= (angle_range+5):
             obstacle_between = True
 
     if not obstacle_between:
@@ -360,7 +360,7 @@ def smart_nav(ship, target, game_map, speed, avoid_obstacles=True, max_correctio
     close_planets = [e for e in entities_within_distance(ship, dist) if isinstance(e, hlt.entity.Planet)]
     for cp in close_planets:
         d = ship.calculate_distance_between(cp)
-        r = cp.radius + ship.radius + 0.1
+        r = cp.radius + ship.radius + 0.3
         sin = r/d
         if sin > 1.0:
             sin = 1.0
@@ -927,11 +927,11 @@ while True:
         # check if we should run away in 4-player games
         runaway = False
         if not two_player:
-            if round_counter >= 100:
+            if round_counter >= 80:
                 num_planets_owned = len(game_map.planets_for_player(me))
                 for p in game_map.all_players():
                     num_enemy_planets = len(game_map.planets_for_player(p)) 
-                    if num_enemy_planets > 2*num_planets_owned and num_enemy_planets > 10 and len(free_ships) < 20:
+                    if num_enemy_planets > 2*num_planets_owned and num_enemy_planets > 10:
                         logging.info("aborting offense, juke city time")
                         runaway = True
             
