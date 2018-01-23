@@ -854,12 +854,9 @@ while True:
                 cd = target_planets[ship.id]
                 # dock if we can
                 if ship.can_dock(cd):
-                    closest_efs = closest_enemy_free_ship(ship, me)
-                    num_es_100 = len(closest_enemy_free_ships_dist(ship, me, dist=100))
-                    if num_es_100 < 3:
-                        cmd = ship.dock(cd)
-                        register_command(ship, cmd)
-                        logging.info("%s docking" % ship.id)
+                    cmd = ship.dock(cd)
+                    register_command(ship, cmd)
+                    logging.info("%s docking" % ship.id)
                 else:
                     cmd = approach_planet(ship, cd)
                     register_command(ship, cmd)
