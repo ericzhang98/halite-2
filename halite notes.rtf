@@ -1,0 +1,190 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1504\cocoasubrtf830
+{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red255\green255\blue255;}
+{\*\expandedcolortbl;;\csgray\c0;\csgray\c100000;}
+\margl1440\margr1440\vieww18700\viewh16660\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs22 \cf2 \cb3 \CocoaLigature0 cool replays\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "https://halite.io/play/?game_id=9086271&replay_class=1&replay_name=replay-20180124-105311%2B0000--1980470772-264-176-1516791155"}}{\fldrslt \cf2 https://halite.io/play/?game_id=9086271&replay_class=1&replay_name=replay-20180124-105311%2B0000--1980470772-264-176-1516791155}}\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "https://halite.io/play/?game_id=9355819&replay_class=1&replay_name=replay-20180126-094552%2B0000--3245488575-312-208-1516959924"}}{\fldrslt \cf2 https://halite.io/play/?game_id=9355819&replay_class=1&replay_name=replay-20180126-094552%2B0000--3245488575-312-208-1516959924}}\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "https://halite.io/play/?game_id=9557456&replay_class=1&replay_name=replay-20180127-222451%2B0000--2037318235-240-160-1517091860"}}{\fldrslt \cf2 https://halite.io/play/?game_id=9557456&replay_class=1&replay_name=replay-20180127-222451%2B0000--2037318235-240-160-1517091860}}\
+\
+\
+\
+last minute\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+\cf2 don\'92t chase dogfighting when 4 player (end earlier somehow)\
+\
+\
+actual todo:\
+defend ships set a limit on distance (stay close to docked ships)\
+optimize planet collision\
+mess around with dogfighting distances (maybe wait before docking)\
+\
+\
+\
+if two ships go for 3-spot last ship go for 3-spot\
+then if one ship goes for 3-spot, other ships go for 3-spot\
+\
+dogfighting \'97 equidistant ships to same ship (closest to avg pos es) if within 10\
+\
+when expanding for 4 player, avoid center planets, prioritize outermost planets (especially along x direction)\
+\
+when expanding for 2 player, prioritize center planets somehow\
+\
+maybe different strength scores depending on num free ships? especially in two player (decrease strength when free ships < enemies) and maybe if more planets\
+\
+end four player early game when a ship is produced\
+\
+\
+fix:\
+better early dogfighting (group ships tighter, be equidistant when attacking nearest ship?)\
+AVOID CENTER PLANETS IN 4 PLAYER \'97 GO FOR OUTER PLANET LITERALLY ALWAYS WINS\
+play defense if less free ships\
+play offense if more free ships\
+attack nearby docked planet if possible when dogfighting\
+efficient checking if planet will collide (angle of range for each distance in a dict)\
+strength scores are same for ship within 5 if num ships > 200 and round > 200\
+go for outer planets + stick together in 4-player?\
+\
+DOGFIGHTING:\
+don\'92t get hella baited cuz enemy will dock\
+undock ships in 4 player?\
+stay grouped\
+know when to keep fighting and when to back off\
+\
+\
+issues to solve:\
+actually attack other ships lol\
+ships are being too safe when near docked ships, need to know when to be more aggressive (while still maintaining clumping)\
+specifically when protecting docked ships ^\
+defend docked ships more\
+don\'92t spread out planets too thin \'97 maybe have a ratio of docked ships to free ships.. or maybe don\'92t have less free ships than opponent\
+better dogfighting for 4 player and maybe 2 player\
+\
+Todo:\
+fix smart nav along borders (count border as obstacle)\
+split attack correctly\
+reduce lookahead distance\
+stick together and go for 3-spot planets and same planet\
+Early game dog fighting \'97 middle planets are fightable, stick together to win on damage, go for 3-ship planet\
+attacking ships with squads + better swarming \'97 swarm scores should be based around the point where we are going\
+fix planet radius distance\
+\
+4player:\
+do something about rushers \'97 undock? stick together and go for 3-spot planets and same planet\
+prioritize planets close to edge \'97 maybe don\'92t use closest_ep on a per-ship basis and just build attack target at start of game\
+choose enemy planet better.. maybe the weakest enemy + close + need to split my targets\
+\
+Consider:\
+bait with a juker and get ppl to fight each other\
+planet explosion if hella enemy ships nearby?\
+Early game dog fighting \'97 splitting apart and going for a dock + rabbit wrecks the opponent?\
+make juke city with most open area, not opposite of mean\
+\
+CLI COMMANDS\
+hlt gym -r "python3 TestBot.py" -r "python3 MyBot.py" -b "./halite" -i 200 -H 160 -W 240\
+hlt gym -r "python3 TestBot.py" -r "python3 MyBot.py" -b "./halite" -i 200 -H 256 -W 384\
+./halite -d "240 160" "python3 TestBot.py" "python3 MyBot.py"\
+./halite -d "384 256" "python3 TestBot.py" "python3 MyBot.py"\
+\
+\
+need to beat\
+./halite -d "240 160" "python3 TestBot.py" "python3 MyBot.py" -s "3018237628"\
+\
+test movement\
+./halite -d "384 256" "python3 TestBot.py" "python3 MyBot.py" -s "1410163165"\
+\
+\
+solve collision\
+\
+./halite -d "240 160" "python3 TestBot.py" "python3 SettlerBot.py" -s "111625443"\
+./halite -d "240 160" "python3 TestBot.py" "python3 SettlerBot.py" -s "195400425"\
+./halite -d "384 256" "python3 TestBot.py" "python3 SettlerBot.py" -s "372567773"\
+./halite -d "384 256" "python3 TestBot.py" "python3 SettlerBot.py" -s "3577595596"\
+./halite -d "384 256" "python3 TestBot.py" "python3 SettlerBot.py" -s "3419904297"\
+./halite -d "384 256" "python3 TestBot.py" "python3 SettlerBot.py" -s "3338306780"\
+./halite -d "384 256" "python3 TestBot.py" "python3 SettlerBot.py" -s "648167449"\
+./halite -d "240 160" "python3 TestBot.py" "python3 SettlerBot.py" -s "3079801676"\
+./halite -d "240 160" "python3 TestBot.py" "python3 SettlerBot.py" -s "2712878796"\
+\
+split \
+./halite -d "384 256" "python3 TestBot.py" "python3 SettlerBot.py" -s "1003651812"\
+\
+\
+142633976 for settler\
+\
+\
+\
+\
+\
+need to dogfight\
+./halite -d "240 160" "python3 TestBot.py" "python3 MyBot.py" -s "206879469"\
+\
+\
+\
+\
+./halite -d "240 160" "python3 Bot10.py" "python3 SettlerBot.py"\
+\
+\
+./halite -d "240 160" "python3 TestBot.py" "python3 Bot9.py" -s "111625443"\
+./halite -d "240 160" "python3 TestBot.py" "python3 Bot9.py" -s "195400425"\
+./halite -d "384 256" "python3 TestBot.py" "python3 Bot9.py" -s "372567773"\
+./halite -d "384 256" "python3 TestBot.py" "python3 Bot9.py" -s "3577595596"\
+./halite -d "384 256" "python3 TestBot.py" "python3 Bot9.py" -s "3419904297"\
+./halite -d "384 256" "python3 TestBot.py" "python3 Bot9.py" -s "3338306780"\
+./halite -d "384 256" "python3 TestBot.py" "python3 Bot9.py" -s "648167449"\
+./halite -d "240 160" "python3 TestBot.py" "python3 Bot9.py" -s "3079801676"\
+./halite -d "240 160" "python3 TestBot.py" "python3 Bot9.py" -s "2712878796"\
+\
+\
+determinism - godamn need to figure out weird shit for recent bot versions\
+\
+./halite -d "240 160" "python3 TestBot.py" "python3 Bot4.py" -s "819948230"\
+Player #0, ezboi, came in rank #1 and was last alive on frame #71, producing 46 ships and dealing 1823 damage!\
+Player #1, ezboi, came in rank #2 and was last alive on frame #70, producing 6 ships and dealing 1407 damage!\
+\
+./halite -d "240 160" "python3 TestBot.py" "python3 Bot4.py" -s "824588337"\
+Opening a file at ./replay-20171227-233836+0800--824588337-240-160-4335388.hlt\
+Player #0, ezboi, came in rank #1 and was last alive on frame #87, producing 69 ships and dealing 4221 damage!\
+Player #1, ezboi, came in rank #2 and was last alive on frame #86, producing 15 ships and dealing 2237 damage!\
+\
+\
+\
+first win against a gold\
+https://halite.io/play/?game_id=5718687\
+\
+first win against tscaptain\
+https://halite.io/play/?game_id=5714303\
+\
+first win against number 1 LOL\
+https://halite.io/play/?game_id=7679968\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "https://halite.io/play/?game_id=8161662&replay_class=1&replay_name=replay-20180117-020459%2B0000--1179373225-288-192-1516154699"}}{\fldrslt \cf2 https://halite.io/play/?game_id=8161662}}\
+\
+rating increase\
+v18 - 47-47 -> 49-136 49.6-178\
+v19 - 44.5-11 -> 47-29 -> 49.5-100 -> 50-200\
+v20 - 46.2-15 -> 48.6-32 -> 50.37-500\
+v20-23 - same as v20 and 19\
+v24 - 47.8-10 -> 47.8-22 -> 49.5-36 -> 50.2-65\
+v25 - 51-36, 51.5-67\
+v30 - 51-44 -> 52.2-400\
+v31 - 45.6-15 -> 49-32\
+\
+\
+\
+new planet distance is slightly better\
+new planet distance + new splitting is decently better\
+new planet distance + new splitting + reduced lookahead is a lot better\
+maybe check if reduced lookahead is better\
+\
+\
+wtf\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "https://halite.io/play/?game_id=7909294&replay_class=1&replay_name=replay-20180114-174545%2B0000--288551736-240-160-1515951944"}}{\fldrslt \cf2 https://halite.io/play/?game_id=7909294&replay_class=1&replay_name=replay-20180114-174545%2B0000--288551736-240-160-1515951944}}}
